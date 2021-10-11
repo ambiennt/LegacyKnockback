@@ -10,6 +10,6 @@ A highly customizable knockback editor for BDS+EZ 1.16.20
     - no forced sprint reset at all (what many bedrock PVP servers currently employ)
 - fixed a bug where being hit with a projectile then by melee would bypass the 10 tick hurt cooldown (configurable)
 - introduce a "reducing" system, where attacking on the same tick that knockback is administered will multiply your knockback by a configurable factor
-- configurable normal knockback and w-tap knockback power + height
+- configurable normal and w-tap knockback, respectively
 - configurable netherite armor knockback resistance
 - configurable projectile knockback (for fishing rods, snowballs, and eggs currently)
