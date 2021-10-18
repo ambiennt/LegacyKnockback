@@ -33,4 +33,5 @@ my personal favorite config:
     useHeightCap: false
     heightCap: 0.4
     projectilesBypassHurtCooldown: false
-    netheriteArmorKnockbackResistance: 0```
+    netheriteArmorKnockbackResistance: 0
+```
