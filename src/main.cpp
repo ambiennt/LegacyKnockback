@@ -31,25 +31,6 @@ void PreInit() {
 }
 void PostInit() {}
 
-class AttributeInstance {
-public:
-    char pad[0x84];
-    float currentVal;
-    float min;
-    float max;
-    float defaultVal;
-};
-
-class BaseAttributeMap {
-public:
-    class AttributeInstance* getMutableInstance(unsigned int);
-};
-
-AttributeInstance* getAttribute(Actor* actor, unsigned int id) {
-    auto attributes = direct_access<BaseAttributeMap*>(actor, 0x438);
-    return attributes->getMutableInstance(id);
-}
-
 bool isComboProjectile(ActorDamageSource &source) { // projectiles used for PVP combos
     switch (source.getDamagingEntityType()) {
         case ActorType::FishingHook:
@@ -74,9 +55,8 @@ TClasslessInstanceHook(bool, "?useLegacyKnockback@KnockbackRules@@YA_NAEBVLevel@
 THook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", void* armorItem) {
 
      bool isNetherite = (direct_access<int>(armorItem, 0x1C0) == 7);
-     if (isNetherite) {
-        return settings.netheriteArmorKnockbackResistance;
-     }
+     if (isNetherite) return settings.netheriteArmorKnockbackResistance;
+
      return original(armorItem);
 }
 
@@ -92,13 +72,13 @@ THook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player *player, Actor *actor)
 
 THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
     
-    //std::cout << "0x" << std::hex << (__int64)_ReturnAddress() - (__int64)GetModuleHandle(0) << std::endl;
+    //std::cout << "0x" << std::hex << (int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0) << std::endl;
     if (mob->getEntityTypeId() == ActorType::Player_0) {
-        if (_ReturnAddress() == (void*)((uintptr_t) GetModuleHandle(0) + 0x3AA84A)) { //sprint stopped via user input
+        if ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0) == 0x3AA84A) { //sprint stopped via user input
             hasResetSprint.insert(mob);
         }
         else if ((!settings.useLegacySprintReset || settings.useJavaSprintReset) || (!settings.useLegacySprintReset && !settings.useJavaSprintReset))  {
-            if (_ReturnAddress() == (void*)((uintptr_t) GetModuleHandle(0) + 0x71E634)) return; //sprint force-stopped when attacking
+            if ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0) == 0x71E634) return; //sprint force-stopped when attacking
         }
     }
     original(mob, shouldSprint);
@@ -116,91 +96,88 @@ THook(bool, "?_hurt@Player@@MEAA_NAEBVActorDamageSource@@H_N1@Z", Player *player
 THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
     ServerPlayer *player, Actor *source, int dmg, float xd, float zd, float power, float height, float heightCap) {
 
-    auto lastHurtCause = direct_access<ActorDamageCause>(player, 0x700);
-    if (lastHurtCause == ActorDamageCause::None) return;
+    if (player->isInCreativeMode()) return;
 
-    float kbEnchantmentBonus = CallServerClassMethod<float>("?getMeleeKnockbackBonus@Mob@@UEAAHXZ", source) * 0.4f;
+    float kbEnchantmentBonus = (float)CallServerClassMethod<int>("?getMeleeKnockbackBonus@Mob@@UEAAHXZ", source) * 0.4f;
     float punchEnchantmentMultiplier = 1.0f;
-    if (_ReturnAddress() == (void*)((uintptr_t) GetModuleHandle(0) + 0x273BFE)) { //hack: get punch knockback value from arrows
+    if ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0) == 0x273BFE) { //hack: get punch knockback value from arrows
         punchEnchantmentMultiplier = power; // enchantment tier * 1.6
     }
+    
+    // initialize values
+    power = settings.normalKnockbackPower;
+    height = settings.normalKnockbackHeight;
+    heightCap = settings.heightCap;
 
+    auto lastHurtCause = player->mLastHurtCause;
     if (lastHurtCause == ActorDamageCause::Projectile) {
         if (dmgSource.count(player)) {
             power = settings.comboProjectileKnockbackPower;
             height = settings.comboProjectileKnockbackPower;
-        }
-        else {
-            power = settings.normalKnockbackPower;
-            height = settings.normalKnockbackHeight;
         }
         power *= punchEnchantmentMultiplier;
     }
     else if (lastHurtCause == ActorDamageCause::EntityAttack) {
         if (hasResetSprint.count(source) && CallServerClassMethod<bool>("?isSprinting@Mob@@UEBA_NXZ", source)) {
             hasResetSprint.erase(source);
-            power = settings.sprintResetKnockbackPower + kbEnchantmentBonus;
-            height = settings.sprintResetKnockbackHeight;
+            power += settings.additionalWTapKnockbackPower;
+            height += settings.additionalWTapKnockbackHeight;
         }
-        else {
-            power = settings.normalKnockbackPower + kbEnchantmentBonus;
-            height = settings.normalKnockbackHeight;
+        uint64_t currentTick = LocateService<Level>()->GetServerTick();
+        if (currentTick - attackTimestamp[player] <= 1) { // attacking on the same tick that you receive knockback will set lower values (aka "reducing")
+            power *= settings.knockbackReductionFactor;
         }
+        power += kbEnchantmentBonus;
     }
-    else {
-        power = settings.normalKnockbackPower;
-        height = settings.normalKnockbackHeight;
-    }
-    heightCap = settings.heightCap;
 
-    auto knockbackResistanceAttribute = getAttribute(player, 9);
-    float scaledKnockbackForce = std::max(1.0f - knockbackResistanceAttribute->currentVal, 0.0f);
+    // calculate knockback resistance
+    float knockbackResistanceValue = getAttribute(player, 9)->currentVal;
+    float scaledKnockbackForce = std::max(1.0f - knockbackResistanceValue, 0.0f);
     if (scaledKnockbackForce < 1.0f) {
         power *= scaledKnockbackForce;
         height *= scaledKnockbackForce;
     }
 
-    uint64_t currentTick = LocateService<Level>()->GetServerTick();
-    if (currentTick - attackTimestamp[player] <= 1) {
-        power *= settings.knockbackReductionFactor; // attacking on the same tick that you receive knockback will set lower values (aka "reducing")
-    }
-
-    //auto posDelta = direct_access<Vec3>(player, 0x494);
-    auto posDelta = getPosDelta(player->getPosOld(), player->getPos());
+    // auto posDelta = player->mStateVectorComponent.mPosDelta;
+    auto posDelta = player->mTeleportedThisTick ? Vec3() : getPosDelta(player->getPosOld(), player->getPos());
+    float oldPosY = posDelta.y;
     float f = sqrt(xd * xd + zd * zd);
     if (f <= 0.0f) return;
 
-    if (settings.useHeightCap) {
-        posDelta.x /= 2.0f;
-        posDelta.y /= 2.0f;
-        posDelta.z /= 2.0f;
+    if (settings.useJavaHeightCap) {
+        posDelta.x /= settings.knockbackFriction;
+        posDelta.y /= settings.knockbackFriction;
+        posDelta.z /= settings.knockbackFriction;
 
         posDelta.x -= xd / f * power;
         posDelta.y += height;
         posDelta.z -= zd / f * power;
 
-        if (posDelta.y > heightCap) {
+        if (posDelta.y > settings.heightThreshold) {
             posDelta.y = heightCap;
         }
     }
     else {
-        posDelta.x /= 2.0f;
-        posDelta.z /= 2.0f;
+        posDelta.x /= settings.knockbackFriction;
+        posDelta.z /= settings.knockbackFriction;
 
         posDelta.x -= xd / f * power;
         posDelta.y = height;
         posDelta.z -= zd / f * power;
+
+        if (settings.useCustomHeightCap && (oldPosY + posDelta.y > settings.heightThreshold)) {
+            posDelta.y = heightCap;
+        }
     }
 
-    /*auto healthAttribute = getAttribute(player, 7);
-    float healthValue = healthAttribute->currentVal;
+    /*float healthValue = getAttribute(player, 7)->currentVal;
     if (healthValue <= 0.0f) {
-        direct_access<bool>(player, 0x570) = true; //mIsKnockedBackOnDeath - client ignores motion packets if it's dead
+        player->mIsKnockedBackOnDeath = true; // client ignores motion packets if it's dead anyway
     }*/
 
     SetActorMotionPacket pkt;
     pkt.rid = player->getRuntimeID();
     pkt.motion = posDelta;
-    Dimension* dimension = player->getDimension();
+    auto dimension = player->getDimension();
     return dimension->sendPacketForEntity(*player, pkt, nullptr);
 }

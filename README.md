@@ -14,24 +14,28 @@ A highly customizable knockback editor for BDS+EZ 1.16.20
 - configurable netherite armor knockback resistance
 - configurable projectile knockback (for fishing rods, snowballs, and eggs currently)
 - configurable heightcap; set max posDelta.y threshold
+- configurable knockback friction (sets how much the target's momentum affects their knockback)
 
 my personal favorite config:
 
 ```
   LegacyKnockback:
     enabled: true
-    normalKnockbackPower: 0.4
+    normalKnockbackPower: 0.375
     normalKnockbackHeight: 0.375
-    sprintResetKnockbackPower: 0.75
-    sprintResetKnockbackHeight: 0.4
-    knockbackReductionFactor: 0.4
+    additionalWTapKnockbackPower: 0.375
+    additionalWTapKnockbackHeight: 0.075000003
+    knockbackReductionFactor: 0.600000024
+    knockbackFriction: 2
     comboProjectileKnockbackEnabled: true
-    comboProjectileKnockbackPower: 0.4
+    comboProjectileKnockbackPower: 0.375
     comboProjectileKnockbackHeight: 0.375
-    useJavaSprintReset: false
+    useJavaSprintReset: true
     useLegacySprintReset: false
-    useHeightCap: false
-    heightCap: 0.4
+    useJavaHeightCap: false
+    useCustomHeightCap: true
+    heightThreshold: 0.400000006
+    heightCap: 0.400000006
     projectilesBypassHurtCooldown: false
     netheriteArmorKnockbackResistance: 0
 ```
