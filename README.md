@@ -24,8 +24,8 @@ my personal favorite config:
     normalKnockbackPower: 0.375
     normalKnockbackHeight: 0.375
     additionalWTapKnockbackPower: 0.375
-    additionalWTapKnockbackHeight: 0.075000003
-    knockbackReductionFactor: 0.600000024
+    additionalWTapKnockbackHeight: 0.075
+    knockbackReductionFactor: 0.6
     knockbackFriction: 2
     comboProjectileKnockbackEnabled: true
     comboProjectileKnockbackPower: 0.375
@@ -34,8 +34,8 @@ my personal favorite config:
     useLegacySprintReset: false
     useJavaHeightCap: false
     useCustomHeightCap: true
-    heightThreshold: 0.400000006
-    heightCap: 0.400000006
+    heightThreshold: 0.4
+    heightCap: 0.4
     projectilesBypassHurtCooldown: false
     netheriteArmorKnockbackResistance: 0
 ```
