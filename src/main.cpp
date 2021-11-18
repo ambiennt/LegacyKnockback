@@ -4,7 +4,7 @@
 DEFAULT_SETTINGS(settings);
 
 static std::unordered_set<Actor*> hasResetSprint;
-static std::unordered_set<Player*> dmgSource;
+static std::unordered_map<Player*, ActorType> dmgSource;
 static std::unordered_map<Player*, uint64_t> attackTimestamp;
 
 void dllenter() {}
@@ -31,8 +31,8 @@ void PreInit() {
 }
 void PostInit() {}
 
-bool isComboProjectile(ActorDamageSource &source) { // projectiles used for PVP combos
-    switch (source.getDamagingEntityType()) {
+bool isComboProjectile(ActorType type) { // projectiles used for PVP combos
+    switch (type) {
         case ActorType::FishingHook:
         case ActorType::Snowball:
         case ActorType::ThrownEgg:
@@ -74,22 +74,19 @@ THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
     
     //std::cout << "0x" << std::hex << (int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0) << std::endl;
     if (mob->getEntityTypeId() == ActorType::Player_0) {
-        if ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0) == 0x3AA84A) { //sprint stopped via user input
+        uint64_t returnAddress = ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0));
+        if (returnAddress == 0x3AA84A) { //sprint stopped via user input
             hasResetSprint.insert(mob);
         }
         else if ((!settings.useLegacySprintReset || settings.useJavaSprintReset) || (!settings.useLegacySprintReset && !settings.useJavaSprintReset))  {
-            if ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0) == 0x71E634) return; //sprint force-stopped when attacking
+            if (returnAddress == 0x71E634) return; //sprint force-stopped when attacking
         }
     }
     original(mob, shouldSprint);
 }
 
 THook(bool, "?_hurt@Player@@MEAA_NAEBVActorDamageSource@@H_N1@Z", Player *player, ActorDamageSource &source, int dmg, bool knock, bool ignite) {
-
-    if (settings.comboProjectileKnockbackEnabled) {
-        if (isComboProjectile(source)) { dmgSource.insert(player); }
-        else { dmgSource.erase(player); }
-    } 
+    dmgSource[player] = source.getDamagingEntityType();
     return original(player, source, dmg, knock, ignite);
 }
 
@@ -111,9 +108,15 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 
     auto lastHurtCause = player->mLastHurtCause;
     if (lastHurtCause == ActorDamageCause::Projectile) {
-        if (dmgSource.count(player)) {
-            power = settings.comboProjectileKnockbackPower;
-            height = settings.comboProjectileKnockbackPower;
+        if (settings.customProjectileKnockbackEnabled) {
+            if (isComboProjectile(dmgSource[player])) {
+                power = settings.comboProjectileKnockbackPower;
+                height = settings.comboProjectileKnockbackHeight;
+            }
+            else if (dmgSource[player] == ActorType::Enderpearl) {
+                power = settings.enderpearlKnockbackPower;
+                height = settings.enderpearlKnockbackHeight;
+            }
         }
         power *= punchEnchantmentMultiplier;
     }
@@ -132,14 +135,14 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 
     // calculate knockback resistance
     float knockbackResistanceValue = getAttribute(player, 9)->currentVal;
-    float scaledKnockbackForce = std::max(1.0f - knockbackResistanceValue, 0.0f);
+    float scaledKnockbackForce = std::fmax(1.0f - knockbackResistanceValue, 0.0f);
     if (scaledKnockbackForce < 1.0f) {
         power *= scaledKnockbackForce;
         height *= scaledKnockbackForce;
     }
 
     // auto posDelta = player->mStateVectorComponent.mPosDelta;
-    auto posDelta = player->mTeleportedThisTick ? Vec3() : getPosDelta(player->getPosOld(), player->getPos());
+    auto posDelta = player->mTeleportedThisTick ? Vec3::ZERO : getPosDelta(player->getPosOld(), player->getPos());
     float oldPosY = posDelta.y;
     float f = sqrt(xd * xd + zd * zd);
     if (f <= 0.0f) return;
@@ -176,8 +179,7 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
     }*/
 
     SetActorMotionPacket pkt;
-    pkt.rid = player->getRuntimeID();
+    pkt.rid = player->mRuntimeID;
     pkt.motion = posDelta;
-    auto dimension = player->getDimension();
-    return dimension->sendPacketForEntity(*player, pkt, nullptr);
+    return player->mDimension->sendPacketForEntity(*player, pkt, nullptr);
 }

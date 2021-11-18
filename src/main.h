@@ -13,7 +13,6 @@
 #include <Actor/ServerPlayer.h>
 #include <Actor/Attribute.h>
 #include <Actor/ActorType.h>
-#include <Actor/ActorRuntimeID.h>
 #include <Actor/ActorDamageSource.h>
 #include <Packet/SetActorMotionPacket.h>
 #include <Level/Level.h>
@@ -26,9 +25,11 @@ inline struct Settings {
     float additionalWTapKnockbackHeight      = 0.0f;
     float knockbackReductionFactor           = 0.6f;
     float knockbackFriction                  = 2.0f;
-    bool comboProjectileKnockbackEnabled     = false;
+    bool customProjectileKnockbackEnabled    = false;
     float comboProjectileKnockbackPower      = 0.4f;
     float comboProjectileKnockbackHeight     = 0.4f;
+    float enderpearlKnockbackPower           = 0.4f;
+    float enderpearlKnockbackHeight          = 0.4f;
     bool useJavaSprintReset                  = true;
     bool useLegacySprintReset                = false;
     bool useJavaHeightCap                    = false;
@@ -45,9 +46,11 @@ inline struct Settings {
            f(settings.additionalWTapKnockbackHeight, node["additionalWTapKnockbackHeight"]) &&
            f(settings.knockbackReductionFactor, node["knockbackReductionFactor"]) &&
            f(settings.knockbackFriction, node["knockbackFriction"]) &&
-           f(settings.comboProjectileKnockbackEnabled, node["comboProjectileKnockbackEnabled"]) &&
+           f(settings.customProjectileKnockbackEnabled, node["customProjectileKnockbackEnabled"]) &&
            f(settings.comboProjectileKnockbackPower, node["comboProjectileKnockbackPower"]) &&
            f(settings.comboProjectileKnockbackHeight, node["comboProjectileKnockbackHeight"]) &&
+           f(settings.enderpearlKnockbackPower, node["enderpearlKnockbackPower"]) &&
+           f(settings.enderpearlKnockbackHeight, node["enderpearlKnockbackHeight"]) &&
            f(settings.useJavaSprintReset, node["useJavaSprintReset"]) &&
            f(settings.useLegacySprintReset, node["useLegacySprintReset"]) &&
            f(settings.useJavaHeightCap, node["useJavaHeightCap"]) &&
