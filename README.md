@@ -21,20 +21,22 @@ my personal favorite config:
 ```
   LegacyKnockback:
     enabled: true
-    normalKnockbackPower: 0.375
+    normalKnockbackPower: 0.4
     normalKnockbackHeight: 0.375
-    additionalWTapKnockbackPower: 0.375
-    additionalWTapKnockbackHeight: 0.075
-    knockbackReductionFactor: 0.6
-    knockbackFriction: 2
-    comboProjectileKnockbackEnabled: true
-    comboProjectileKnockbackPower: 0.375
-    comboProjectileKnockbackHeight: 0.375
+    additionalWTapKnockbackPower: 0.35
+    additionalWTapKnockbackHeight: 0.085
+    knockbackReductionFactor: 0.65
+    knockbackFriction: 1.6
+    customProjectileKnockbackEnabled: true
+    comboProjectileKnockbackPower: 0.4
+    comboProjectileKnockbackHeight: 0.36
+    enderpearlKnockbackPower: 0.8
+    enderpearlKnockbackHeight: 0.36
     useJavaSprintReset: true
     useLegacySprintReset: false
     useJavaHeightCap: false
     useCustomHeightCap: true
-    heightThreshold: 0.4
+    heightThreshold: 0.425
     heightCap: 0.4
     projectilesBypassHurtCooldown: false
     netheriteArmorKnockbackResistance: 0
