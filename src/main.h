@@ -17,6 +17,7 @@
 #include <Packet/SetActorMotionPacket.h>
 #include <Level/Level.h>
 #include <Level/Dimension.h>
+#include <Item/ArmorItem.h>
 
 inline struct Settings {
     float normalKnockbackPower               = 0.4f;
