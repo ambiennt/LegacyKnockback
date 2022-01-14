@@ -3,18 +3,9 @@
 
 DEFAULT_SETTINGS(settings);
 
-static std::unordered_set<Mob*> hasResetSprint;
-static std::unordered_map<Player*, ActorType> dmgSource;
-static std::unordered_map<Player*, uint64_t> attackTimestamp;
-
 void dllenter() {}
 void dllexit() {}
 void PreInit() {
-	GetServerSymbolWithOffset<PatchSpan<8>>("?doKnockbackAttack@KnockbackRules@@YAXAEAVMob@@0AEBVVec2@@M@Z", 0x117)
-		->VerifyPatchFunction({0xF3, 0x0F, 0x59, 0x1D, 0x59, 0x6D, 0xAB, 0x00}, NopFilled{}); // F3 0F 59 1D 59 6D AB 00
-	GetServerSymbolWithOffset<PatchSpan<8>>("?doKnockbackAttack@KnockbackRules@@YAXAEAVMob@@0AEBVVec2@@M@Z", 0x124)
-		->VerifyPatchFunction({0xF3, 0x0F, 0x59, 0x15, 0x4C, 0x6D, 0xAB, 0x00}, NopFilled{}); // F3 0F 59 15 4C 6D AB 00
-
 	// prevent projectiles from bypassing hurt cooldown by setting newEntityAttack check to false
 	if (!settings.projectilesBypassHurtCooldown) {
 		GetServerSymbolWithOffset<PatchSpan<3>>("?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z", 0x84)
@@ -22,16 +13,10 @@ void PreInit() {
 		GetServerSymbolWithOffset<PatchSpan<3>>("?_hurt@Mob@@MEAA_NAEBVActorDamageSource@@H_N1@Z", 0x48)
 			->VerifyPatchFunction({0x83, 0xF8, 0x02}, {0x83, 0xF8, 0x20}); // 83 F8 02
 	}
-
-	Mod::PlayerDatabase::GetInstance().AddListener(SIG("left"), [](Mod::PlayerEntry const &entry) {
-		dmgSource.erase(entry.player);
-		hasResetSprint.erase(entry.player);
-		attackTimestamp.erase(entry.player);
-	});
 }
 void PostInit() {}
 
-inline bool isComboProjectile(ActorType type) { // projectiles used for PVP combos
+__forceinline bool isComboProjectile(ActorType type) { // projectiles used for PVP combos
 	switch (type) {
 		case ActorType::FishingHook:
 		case ActorType::Snowball:
@@ -42,7 +27,18 @@ inline bool isComboProjectile(ActorType type) { // projectiles used for PVP comb
 	}
 }
 
-TClasslessInstanceHook(bool, "?useLegacyKnockback@KnockbackRules@@YA_NAEBVLevel@@@Z", void* level) { return true; }
+// KnockbackRules is a namespace, not a class
+THook(bool, "?useLegacyKnockback@KnockbackRules@@YA_NAEBVLevel@@@Z", void* level) { return true; }
+
+// only called when player attacks while sprinting
+// but silently fails in 1.16 when attacking players so this function can be ignored
+// the player pushable component cant be found and so they dont ever take bonus knockback
+THook(void, "?doKnockbackAttack@KnockbackRules@@YAXAEAVMob@@0AEBVVec2@@M@Z",
+	Mob &self, Mob &target, Vec2 const &direction, float force) {
+	if (target.getEntityTypeId() == ActorType::Player_0) return;
+	return original(self, target, direction, force);
+}
+
 
 THook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", ArmorItem *item) {
 	 if (item->mModelIndex == 7) return settings.netheriteArmorKnockbackResistance;
@@ -50,7 +46,7 @@ THook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", ArmorItem *item)
 }
 
 THook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player *player, Actor *actor) {
-	attackTimestamp[player] = LocateService<Level>()->GetServerTick();
+	player->EZPlayerFields->mLastAttackedActorTimestamp = LocateService<Level>()->getServerTick();
 	bool result = original(player, actor);
 	if (settings.useJavaSprintReset && (actor->getEntityTypeId() == ActorType::Player_0)) {
 		((Player*)actor)->setSprinting(false);
@@ -63,7 +59,7 @@ THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
 	if (mob->getEntityTypeId() == ActorType::Player_0) {
 		uint64_t returnAddress = ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0));
 		if (returnAddress == 0x3AA84A) { //sprint stopped via user input
-			hasResetSprint.insert(mob);
+			((Player*)mob)->EZPlayerFields->mHasResetSprint = true;
 		}
 		else if ((!settings.useLegacySprintReset || settings.useJavaSprintReset) || (!settings.useLegacySprintReset && !settings.useJavaSprintReset)) {
 			if (returnAddress == 0x71E634) return; //sprint force-stopped when attacking
@@ -73,7 +69,7 @@ THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
 }
 
 THook(bool, "?_hurt@Player@@MEAA_NAEBVActorDamageSource@@H_N1@Z", Player *player, ActorDamageSource &source, int dmg, bool knock, bool ignite) {
-	dmgSource[player] = source.getDamagingEntityType();
+	player->EZPlayerFields->mLastHurtByDamager = source.getDamagingEntityType();
 	return original(player, source, dmg, knock, ignite);
 }
 
@@ -101,12 +97,12 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 
 		if (settings.customProjectileKnockbackEnabled) {
 
-			if (isComboProjectile(dmgSource[player])) {
+			if (isComboProjectile(player->EZPlayerFields->mLastHurtByDamager)) {
 				power = settings.comboProjectileKnockbackPower;
 				height = settings.comboProjectileKnockbackHeight;
 			}
 
-			else if (dmgSource[player] == ActorType::Enderpearl) {
+			else if (player->EZPlayerFields->mLastHurtByDamager == ActorType::Enderpearl) {
 				power = settings.enderpearlKnockbackPower;
 				height = settings.enderpearlKnockbackHeight;
 			}
@@ -116,25 +112,29 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 
 	else if (source && fromEntity) {
 
-		auto attacker = ((Mob*)source);
-		float kbEnchantmentBonus = ((float)(attacker->getMeleeKnockbackBonus()) * 0.4f);
+		float kbEnchantmentBonus = (float)(((Mob*)source)->getMeleeKnockbackBonus()) * 0.4f;
 
-		if (hasResetSprint.count(attacker) && attacker->isSprinting()) {
-			hasResetSprint.erase(attacker);
-			power += settings.additionalWTapKnockbackPower;
-			height += settings.additionalWTapKnockbackHeight;
+		if (source->getEntityTypeId() == ActorType::Player_0) {
+
+			auto attacker = ((Player*)source);
+			if (attacker->EZPlayerFields->mHasResetSprint && attacker->isSprinting()) {
+				power += settings.additionalWTapKnockbackPower;
+				height += settings.additionalWTapKnockbackHeight;
+				attacker->EZPlayerFields->mHasResetSprint = false;
+			}
 		}
 
 		// attacking on the same tick that you receive knockback will set lower values (aka "reducing")
-		uint64_t currentTick = LocateService<Level>()->GetServerTick();
-		if ((currentTick - attackTimestamp[player]) <= 1) {
+		uint64_t currentTick = LocateService<Level>()->getServerTick();
+		if ((currentTick - player->EZPlayerFields->mLastAttackedActorTimestamp) <= 1) {
 			power *= settings.knockbackReductionFactor;
 		}
+
 		power += kbEnchantmentBonus;
 	}
 
 	// calculate knockback resistance
-	float knockbackResistanceValue = getAttribute(player, 9)->currentVal;
+	float knockbackResistanceValue = player->getAttributeInstanceFromId(AttributeIds::KnockbackResistance)->currentVal;
 	float scaledKnockbackForce = std::fmax(1.0f - knockbackResistanceValue, 0.0f);
 
 	if (scaledKnockbackForce < 1.0f) {
@@ -172,7 +172,7 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 		}
 	}
 
-	/*float healthValue = getAttribute(player, 7)->currentVal;
+	/*float healthValue = player->getAttributeInstanceFromId(AttributeIds::Health)->currentVal;
 	if (healthValue <= 0.0f) {
 		player->mIsKnockedBackOnDeath = true; // client ignores motion packets if it's dead anyway
 	}*/
