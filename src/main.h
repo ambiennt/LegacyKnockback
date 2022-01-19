@@ -32,7 +32,6 @@ inline struct Settings {
 	float enderpearlKnockbackPower           = 0.4f;
 	float enderpearlKnockbackHeight          = 0.4f;
 	bool useJavaSprintReset                  = true;
-	bool useLegacySprintReset                = false;
 	bool useJavaHeightCap                    = false;
 	bool useCustomHeightCap                  = true;
 	float heightThreshold                    = 0.4f;
@@ -53,7 +52,6 @@ inline struct Settings {
 			   f(settings.enderpearlKnockbackPower, node["enderpearlKnockbackPower"]) &&
 			   f(settings.enderpearlKnockbackHeight, node["enderpearlKnockbackHeight"]) &&
 			   f(settings.useJavaSprintReset, node["useJavaSprintReset"]) &&
-			   f(settings.useLegacySprintReset, node["useLegacySprintReset"]) &&
 			   f(settings.useJavaHeightCap, node["useJavaHeightCap"]) &&
 			   f(settings.useCustomHeightCap, node["useCustomHeightCap"]) &&
 			   f(settings.heightThreshold, node["heightThreshold"]) &&

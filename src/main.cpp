@@ -45,13 +45,21 @@ THook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", ArmorItem *item)
 	 return original(item);
 }
 
-THook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player *player, Actor *actor) {
+THook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player *player, Actor &actor) {
 	player->EZPlayerFields->mLastAttackedActorTimestamp = LocateService<Level>()->getServerTick();
 	bool result = original(player, actor);
-	if (settings.useJavaSprintReset && (actor->getEntityTypeId() == ActorType::Player_0)) {
-		((Player*)actor)->setSprinting(false);
+	if (settings.useJavaSprintReset && (actor.getEntityTypeId() == ActorType::Player_0)) {
+		((Player*) &actor)->setSprinting(false);
 	}
 	return result;
+}
+
+// use these values for more accurate player pos
+THook(void, "?normalTick@ServerPlayer@@UEAAXXZ", ServerPlayer *player) {
+	auto fields = player->EZPlayerFields;
+	fields->mRawPos = player->getPos();
+	original(player);
+	fields->mRawPosOld = player->getPos();
 }
 
 THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
@@ -59,10 +67,10 @@ THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
 	if (mob->getEntityTypeId() == ActorType::Player_0) {
 		uint64_t returnAddress = ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0));
 		if (returnAddress == 0x3AA84A) { //sprint stopped via user input
-			((Player*)mob)->EZPlayerFields->mHasResetSprint = true;
+			((Player*) mob)->EZPlayerFields->mHasResetSprint = true;
 		}
-		else if ((!settings.useLegacySprintReset || settings.useJavaSprintReset) || (!settings.useLegacySprintReset && !settings.useJavaSprintReset)) {
-			if (returnAddress == 0x71E634) return; //sprint force-stopped when attacking
+		else if (settings.useJavaSprintReset && (returnAddress == 0x71E634)) {
+			return; //sprint force-stopped when attacking (called by vanilla BDS, we want to call it on our own)
 		}
 	}
 	original(mob, shouldSprint);
@@ -97,12 +105,14 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 
 		if (settings.customProjectileKnockbackEnabled) {
 
-			if (isComboProjectile(player->EZPlayerFields->mLastHurtByDamager)) {
+			auto damager = player->EZPlayerFields->mLastHurtByDamager;
+			
+			if (isComboProjectile(damager)) {
 				power = settings.comboProjectileKnockbackPower;
 				height = settings.comboProjectileKnockbackHeight;
 			}
 
-			else if (player->EZPlayerFields->mLastHurtByDamager == ActorType::Enderpearl) {
+			else if (damager == ActorType::Enderpearl) {
 				power = settings.enderpearlKnockbackPower;
 				height = settings.enderpearlKnockbackHeight;
 			}
@@ -116,7 +126,7 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 
 		if (source->getEntityTypeId() == ActorType::Player_0) {
 
-			auto attacker = ((Player*)source);
+			auto attacker = ((Player*) source);
 			if (attacker->EZPlayerFields->mHasResetSprint && attacker->isSprinting()) {
 				power += settings.additionalWTapKnockbackPower;
 				height += settings.additionalWTapKnockbackHeight;
@@ -143,8 +153,9 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 	}
 
 	// auto posDelta = player->mStateVectorComponent.mPosDelta;
-	auto posDelta = player->mTeleportedThisTick ? Vec3::ZERO : player->getPosDelta();
+	auto posDelta = player->mTeleportedThisTick ? Vec3::ZERO : player->getRawPosDelta();
 	float oldPosDeltaY = posDelta.y;
+
 	float f = sqrt(xd * xd + zd * zd);
 	if (f <= 0.0f) return;
 	float f1 = 1.0f / f;
