@@ -41,7 +41,7 @@ THook(void, "?doKnockbackAttack@KnockbackRules@@YAXAEAVMob@@0AEBVVec2@@M@Z",
 
 
 THook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", ArmorItem *item) {
-	 if (item->mModelIndex == 7) return settings.netheriteArmorKnockbackResistance;
+	 if (item->mModelIndex == 7) return settings.netheriteArmorKBResistance;
 	 return original(item);
 }
 
@@ -57,9 +57,9 @@ THook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player *player, Actor &actor)
 // use these values for more accurate player pos
 THook(void, "?normalTick@ServerPlayer@@UEAAXXZ", ServerPlayer *player) {
 	auto fields = player->EZPlayerFields;
-	fields->mRawPos = player->getPos();
-	original(player);
 	fields->mRawPosOld = player->getPos();
+	original(player);
+	fields->mRawPos = player->getPos();
 }
 
 THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
@@ -70,7 +70,7 @@ THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
 			((Player*) mob)->EZPlayerFields->mHasResetSprint = true;
 		}
 		else if (settings.useJavaSprintReset && (returnAddress == 0x71E634)) {
-			return; //sprint force-stopped when attacking (called by vanilla BDS, we want to call it on our own)
+			return; // sprint force-stopped when attacking (called by vanilla BDS, we want to call it on our own)
 		}
 	}
 	original(mob, shouldSprint);
@@ -85,36 +85,36 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 	ServerPlayer *player, Actor *source, int dmg, float xd, float zd, float power, float height, float heightCap) {
 
 	// bug: vanilla calls punch arrows to do knockback on creative players
-	if ((player->mPlayerGameType == GameType::Creative) || (player->mPlayerGameType == GameType::CreativeViewer)) return;
+	if (player->isInCreativeOrCreativeViewerMode()) return;
 
 	auto lastHurtCause = player->mLastHurtCause;
 	bool fromEntity = (lastHurtCause == ActorDamageCause::EntityAttack);
 	bool fromProjectile = (lastHurtCause == ActorDamageCause::Projectile);
 
 	float punchEnchantmentMultiplier = 1.0f;
-	if (((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0)) == 0x273BFE) { //hack: get punch knockback value from arrows
+	if (((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0)) == 0x273BFE) { // hack: get punch knockback value from arrows
 		punchEnchantmentMultiplier = power; // enchantment tier * 1.6
 	}
 
 	// initialize values
-	power = settings.normalKnockbackPower;
-	height = settings.normalKnockbackHeight;
+	power = settings.normalKBPower;
+	height = settings.normalKBHeight;
 	heightCap = settings.heightCap;
 
 	if (fromProjectile) {
 
-		if (settings.customProjectileKnockbackEnabled) {
+		if (settings.customProjectileKBEnabled) {
 
 			auto damager = player->EZPlayerFields->mLastHurtByDamager;
-			
+
 			if (isComboProjectile(damager)) {
-				power = settings.comboProjectileKnockbackPower;
-				height = settings.comboProjectileKnockbackHeight;
+				power = settings.comboProjectileKBPower;
+				height = settings.comboProjectileKBHeight;
 			}
 
 			else if (damager == ActorType::Enderpearl) {
-				power = settings.enderpearlKnockbackPower;
-				height = settings.enderpearlKnockbackHeight;
+				power = settings.enderpearlKBPower;
+				height = settings.enderpearlKBHeight;
 			}
 		}
 		power *= punchEnchantmentMultiplier;
@@ -122,14 +122,14 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 
 	else if (source && fromEntity) {
 
-		float kbEnchantmentBonus = (float)(((Mob*)source)->getMeleeKnockbackBonus()) * 0.4f;
+		float kbEnchantmentBonus = (float)(((Mob*) source)->getMeleeKnockbackBonus()) * 0.4f;
 
 		if (source->getEntityTypeId() == ActorType::Player_0) {
 
 			auto attacker = ((Player*) source);
 			if (attacker->EZPlayerFields->mHasResetSprint && attacker->isSprinting()) {
-				power += settings.additionalWTapKnockbackPower;
-				height += settings.additionalWTapKnockbackHeight;
+				power += settings.additionalWTapKBPower;
+				height += settings.additionalWTapKBHeight;
 				attacker->EZPlayerFields->mHasResetSprint = false;
 			}
 		}
@@ -137,7 +137,7 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 		// attacking on the same tick that you receive knockback will set lower values (aka "reducing")
 		uint64_t currentTick = LocateService<Level>()->getServerTick();
 		if ((currentTick - player->EZPlayerFields->mLastAttackedActorTimestamp) <= 1) {
-			power *= settings.knockbackReductionFactor;
+			power *= settings.KBReductionFactor;
 		}
 
 		power += kbEnchantmentBonus;
@@ -152,14 +152,22 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 		height *= scaledKnockbackForce;
 	}
 
-	// auto posDelta = player->mStateVectorComponent.mPosDelta;
-	auto posDelta = player->mTeleportedThisTick ? Vec3::ZERO : player->getRawPosDelta();
-	float oldPosDeltaY = posDelta.y;
-
 	float f = sqrt(xd * xd + zd * zd);
 	if (f <= 0.0f) return;
 	float f1 = 1.0f / f;
-	float f2 = 1.0f / settings.knockbackFriction;
+	float f2 = 1.0f / settings.KBFriction;
+
+	// auto posDelta = player->mStateVectorComponent.mPosDelta;
+	auto posDelta = player->getRawPosDelta();
+	float oldPosDeltaY = posDelta.y; // save later for custom heightcap mechanics
+
+	// clamp pos delta
+	float d = sqrt(posDelta.x * posDelta.x + posDelta.z * posDelta.z);
+	if (d > settings.maxHorizontalDisplacement) {
+		posDelta.normalizeXZ();
+		posDelta.x *= settings.maxHorizontalDisplacement;
+		posDelta.z *= settings.maxHorizontalDisplacement;
+	}
 
 	posDelta.x *= f2;
 	posDelta.z *= f2;
@@ -167,6 +175,7 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 	posDelta.x -= xd * f1 * power;
 	posDelta.z -= zd * f1 * power;
 
+	// heightcap stuff
 	if (settings.useJavaHeightCap) {
 		posDelta.y *= f2;
 		posDelta.y += height;
