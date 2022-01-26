@@ -7,9 +7,6 @@
 #include <yaml.h>
 #include <Math/Vec2.h>
 #include <Math/Vec3.h>
-#include <Actor/Actor.h>
-#include <Actor/Mob.h>
-#include <Actor/Player.h>
 #include <Actor/ServerPlayer.h>
 #include <Actor/Attribute.h>
 #include <Actor/ActorType.h>
@@ -63,4 +60,4 @@ inline struct Settings {
 		}
 } settings;
 
-DEF_LOGGER("LegacyKB");
+DEF_LOGGER("LegacyKnockback");
