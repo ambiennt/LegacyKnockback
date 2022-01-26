@@ -21,7 +21,7 @@ my personal favorite config:
 ```
   LegacyKnockback:
     enabled: true
-    normalKBPower: 0.0.4
+    normalKBPower: 0.4
     normalKBHeight: 0.375
     additionalWTapKBPower: 0.35
     additionalWTapKBHeight: 0.085
