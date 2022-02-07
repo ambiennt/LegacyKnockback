@@ -16,7 +16,7 @@ void PreInit() {
 }
 void PostInit() {}
 
-__forceinline bool isComboProjectile(ActorType type) { // projectiles used for PVP combos
+inline bool isComboProjectile(ActorType type) { // projectiles used for PVP combos
 	switch (type) {
 		case ActorType::FishingHook:
 		case ActorType::Snowball:
@@ -40,54 +40,61 @@ THook(void, "?doKnockbackAttack@KnockbackRules@@YAXAEAVMob@@0AEBVVec2@@M@Z",
 }
 
 
-THook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", ArmorItem *item) {
-	 if (item->mModelIndex == 7) return settings.netheriteArmorKBResistance;
-	 return original(item);
+TInstanceHook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", ArmorItem) {
+	 if (this->mModelIndex == 7) return settings.netheriteArmorKBResistance;
+	 return original(this);
 }
 
-THook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player *player, Actor &actor) {
-	player->EZPlayerFields->mLastAttackedActorTimestamp = LocateService<Level>()->getServerTick();
-	bool result = original(player, actor);
+// use these values for more accurate player pos
+TInstanceHook(void, "?normalTick@ServerPlayer@@UEAAXXZ", ServerPlayer) {
+	auto fields = this->EZPlayerFields;
+	fields->mRawPosOld = this->getPos();
+	original(this);
+	fields->mRawPos = this->getPos();
+}
+
+TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor) {
+	this->EZPlayerFields->mLastAttackedActorTimestamp = LocateService<Level>()->getServerTick();
+	bool result = original(this, actor);
 	if (settings.useJavaSprintReset && (actor.getEntityTypeId() == ActorType::Player_0)) {
-		((Player*) &actor)->setSprinting(false);
+		this->setSprinting(false);
 	}
 	return result;
 }
 
-// use these values for more accurate player pos
-THook(void, "?normalTick@ServerPlayer@@UEAAXXZ", ServerPlayer *player) {
-	auto fields = player->EZPlayerFields;
-	fields->mRawPosOld = player->getPos();
-	original(player);
-	fields->mRawPos = player->getPos();
-}
-
 THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
+
 	//std::cout << "0x" << std::hex << (int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0) << std::endl;
 	if (mob->getEntityTypeId() == ActorType::Player_0) {
+		
 		uint64_t returnAddress = ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0));
-		if (returnAddress == 0x3AA84A) { //sprint stopped via user input
-			((Player*) mob)->EZPlayerFields->mHasResetSprint = true;
-		}
-		else if (settings.useJavaSprintReset && (returnAddress == 0x71E634)) {
-			return; // sprint force-stopped when attacking (called by vanilla BDS, we want to call it on our own)
+		switch (returnAddress) {
+			case 0x3AA84A: { // sprint stopped via user input
+				((Player*) mob)->EZPlayerFields->mHasResetSprint = true;
+				break;
+			}
+			case 0x71E634: // sprint force-stopped when attacking (called by vanilla BDS, we want to call it on our own)
+				return;
+
+			default: break;
 		}
 	}
 	original(mob, shouldSprint);
 }
 
-THook(bool, "?_hurt@Player@@MEAA_NAEBVActorDamageSource@@H_N1@Z", Player *player, ActorDamageSource &source, int dmg, bool knock, bool ignite) {
-	player->EZPlayerFields->mLastHurtByDamager = source.getDamagingEntityType();
-	return original(player, source, dmg, knock, ignite);
+TInstanceHook(bool, "?_hurt@Player@@MEAA_NAEBVActorDamageSource@@H_N1@Z",
+	Player, ActorDamageSource &source, int dmg, bool knock, bool ignite) {
+	this->EZPlayerFields->mLastHurtByDamager = source.getDamagingEntityType();
+	return original(this, source, dmg, knock, ignite);
 }
 
-THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
-	ServerPlayer *player, Actor *source, int dmg, float xd, float zd, float power, float height, float heightCap) {
+TInstanceHook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
+	ServerPlayer, Actor *source, int dmg, float xd, float zd, float power, float height, float heightCap) {
 
 	// bug: vanilla calls punch arrows to do knockback on creative players
-	if (player->isInCreativeOrCreativeViewerMode()) return;
+	if (this->isInCreativeOrCreativeViewerMode()) return;
 
-	auto lastHurtCause = player->mLastHurtCause;
+	auto lastHurtCause = this->mLastHurtCause;
 	bool fromEntity = (lastHurtCause == ActorDamageCause::EntityAttack);
 	bool fromProjectile = (lastHurtCause == ActorDamageCause::Projectile);
 
@@ -105,7 +112,7 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 
 		if (settings.customProjectileKBEnabled) {
 
-			auto damager = player->EZPlayerFields->mLastHurtByDamager;
+			auto damager = this->EZPlayerFields->mLastHurtByDamager;
 
 			if (isComboProjectile(damager)) {
 				power = settings.comboProjectileKBPower;
@@ -136,7 +143,7 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 
 		// attacking on the same tick that you receive knockback will set lower values (aka "reducing")
 		uint64_t currentTick = LocateService<Level>()->getServerTick();
-		if ((currentTick - player->EZPlayerFields->mLastAttackedActorTimestamp) <= 1) {
+		if ((currentTick - this->EZPlayerFields->mLastAttackedActorTimestamp) <= 1) {
 			power *= settings.KBReductionFactor;
 		}
 
@@ -144,7 +151,7 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 	}
 
 	// calculate knockback resistance
-	float knockbackResistanceValue = player->getAttributeInstanceFromId(AttributeIds::KnockbackResistance)->currentVal;
+	float knockbackResistanceValue = this->getAttributeInstanceFromId(AttributeIds::KnockbackResistance)->currentVal;
 	float scaledKnockbackForce = std::fmax(1.0f - knockbackResistanceValue, 0.0f);
 
 	if (scaledKnockbackForce < 1.0f) {
@@ -152,17 +159,17 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 		height *= scaledKnockbackForce;
 	}
 
-	float f = sqrt(xd * xd + zd * zd);
+	float f = std::sqrtf(xd * xd + zd * zd);
 	if (f <= 0.0f) return;
 	float f1 = 1.0f / f;
 	float f2 = 1.0f / settings.KBFriction;
 
-	// auto posDelta = player->mStateVectorComponent.mPosDelta;
-	auto posDelta = player->getRawPosDelta();
+	// auto posDelta = this->mStateVectorComponent.mPosDelta;
+	auto posDelta = this->getRawPosDelta();
 	float oldPosDeltaY = posDelta.y; // save later for custom heightcap mechanics
 
 	// clamp pos delta
-	float d = sqrt(posDelta.x * posDelta.x + posDelta.z * posDelta.z);
+	float d = std::sqrtf(posDelta.x * posDelta.x + posDelta.z * posDelta.z);
 	if (d > settings.maxHorizontalDisplacement) {
 		posDelta.normalizeXZ();
 		posDelta.x *= settings.maxHorizontalDisplacement;
@@ -192,11 +199,11 @@ THook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 		}
 	}
 
-	/*float healthValue = player->getAttributeInstanceFromId(AttributeIds::Health)->currentVal;
+	/*float healthValue = this->getAttributeInstanceFromId(AttributeIds::Health)->currentVal;
 	if (healthValue <= 0.0f) {
-		player->mIsKnockedBackOnDeath = true; // client ignores motion packets if it's dead anyway
+		this->mIsKnockedBackOnDeath = true; // client ignores motion packets if it's dead anyway
 	}*/
 
-	SetActorMotionPacket pkt(player->mRuntimeID, posDelta);
-	player->mDimension->sendPacketForEntity(*player, pkt, nullptr);
+	SetActorMotionPacket pkt(this->mRuntimeID, posDelta);
+	this->mDimension->sendPacketForEntity(*this, pkt, nullptr);
 }
