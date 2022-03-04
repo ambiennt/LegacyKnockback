@@ -73,7 +73,7 @@ TInstanceHook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob, bool shouldSprint) {
 TInstanceHook(void, "?handle@ServerNetworkHandler@@UEAAXAEBVNetworkIdentifier@@AEBVPlayerActionPacket@@@Z",
 	ServerNetworkHandler, NetworkIdentifier const &netId, PlayerActionPacket const &pkt) {
 	original(this, netId, pkt);
-	if (pkt.mAction == PlayerActionType::START_SPRINT) {
+	if (pkt.mAction == PlayerActionType::STOP_SPRINT) {
 		auto player = this->_getServerPlayer(netId, pkt.mClientSubId);
 		if (player) {
 			player->EZPlayerFields->mHasResetSprint = true;
