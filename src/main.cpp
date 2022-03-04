@@ -39,7 +39,6 @@ THook(void, "?doKnockbackAttack@KnockbackRules@@YAXAEAVMob@@0AEBVVec2@@M@Z",
 	return original(self, target, direction, force);
 }
 
-
 TInstanceHook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", ArmorItem) {
 	 if (this->mModelIndex == 7) return settings.netheriteArmorKBResistance;
 	 return original(this);
@@ -62,24 +61,24 @@ TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor)
 	return result;
 }
 
-THook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob *mob, bool shouldSprint) {
+TInstanceHook(void, "?setSprinting@Mob@@UEAAX_N@Z", Mob, bool shouldSprint) {
+	// std::cout << "return address: 0x" << std::hex << ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0)) << std::endl;
+	// sprint force-stopped when attacking (called by vanilla BDS, we want to call it on our own)
+	if (!shouldSprint && (this->getEntityTypeId() == ActorType::Player_0)) {
+		if (((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0)) == 0x71E634) return;
+	}
+	original(this, shouldSprint);
+}
 
-	//std::cout << "0x" << std::hex << (int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0) << std::endl;
-	if (mob->getEntityTypeId() == ActorType::Player_0) {
-		
-		uint64_t returnAddress = ((int64_t)_ReturnAddress() - (int64_t)GetModuleHandle(0));
-		switch (returnAddress) {
-			case 0x3AA84A: { // sprint stopped via user input
-				((Player*) mob)->EZPlayerFields->mHasResetSprint = true;
-				break;
-			}
-			case 0x71E634: // sprint force-stopped when attacking (called by vanilla BDS, we want to call it on our own)
-				return;
-
-			default: break;
+TInstanceHook(void, "?handle@ServerNetworkHandler@@UEAAXAEBVNetworkIdentifier@@AEBVPlayerActionPacket@@@Z",
+	ServerNetworkHandler, NetworkIdentifier const &netId, PlayerActionPacket const &pkt) {
+	original(this, netId, pkt);
+	if (pkt.mAction == PlayerActionType::START_SPRINT) {
+		auto player = this->_getServerPlayer(netId, pkt.mClientSubId);
+		if (player) {
+			player->EZPlayerFields->mHasResetSprint = true;
 		}
 	}
-	original(mob, shouldSprint);
 }
 
 TInstanceHook(bool, "?_hurt@Player@@MEAA_NAEBVActorDamageSource@@H_N1@Z",
@@ -194,16 +193,15 @@ TInstanceHook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z",
 	else {
 		posDelta.y = height;
 
-		if (settings.useCustomHeightCap && (oldPosDeltaY + posDelta.y > settings.heightThreshold)) {
+		if (settings.useCustomHeightCap && ((oldPosDeltaY + posDelta.y) > settings.heightThreshold)) {
 			posDelta.y = heightCap;
 		}
 	}
 
 	/*float healthValue = this->getAttributeInstanceFromId(AttributeIds::Health)->currentVal;
-	if (healthValue <= 0.0f) {
-		this->mIsKnockedBackOnDeath = true; // client ignores motion packets if it's dead anyway
+	if (healthValue <= 0.f) {
+		this->mIsKnockedBackOnDeath = true; // client ignores motion packets if it's dead
 	}*/
 
-	SetActorMotionPacket pkt(this->mRuntimeID, posDelta);
-	this->mDimension->sendPacketForEntity(*this, pkt, nullptr);
+	this->mDimension->sendPacketForEntity(*this, SetActorMotionPacket(this->mRuntimeID, posDelta), nullptr);
 }

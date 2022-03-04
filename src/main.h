@@ -11,10 +11,12 @@
 #include <Actor/Attribute.h>
 #include <Actor/ActorType.h>
 #include <Actor/ActorDamageSource.h>
-#include <Packet/SetActorMotionPacket.h>
 #include <Level/Level.h>
 #include <Level/Dimension.h>
 #include <Item/ArmorItem.h>
+#include <Packet/SetActorMotionPacket.h>
+#include <Packet/PlayerActionPacket.h>
+#include <Net/ServerNetworkHandler.h>
 
 inline struct Settings {
 	float normalKBPower                = 0.4f;
