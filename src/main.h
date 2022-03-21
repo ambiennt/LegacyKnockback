@@ -13,10 +13,20 @@
 #include <Actor/ActorDamageSource.h>
 #include <Level/Level.h>
 #include <Level/Dimension.h>
+#include <Level/GameRules.h>
+#include <Item/ItemStack.h>
 #include <Item/ArmorItem.h>
 #include <Packet/SetActorMotionPacket.h>
 #include <Packet/PlayerActionPacket.h>
 #include <Net/ServerNetworkHandler.h>
+#include <Item/Enchant.h>
+#include <Component/ProjectileComponent.h>
+#include <Actor/MobEffect.h>
+#include <Actor/ActorEvent.h>
+#include <Actor/StateVectorComponent.h>
+
+#include <cmath>
+#include <random>
 
 inline struct Settings {
 	float normalKBPower                = 0.4f;
@@ -38,6 +48,8 @@ inline struct Settings {
 	float heightCap                    = 0.4f;
 	bool projectilesBypassHurtCooldown = false;
 	float netheriteArmorKBResistance   = 0.0f;
+	bool playersCanCrit                = true;
+	uint32_t hurtCooldownTicks         = 10;
 
 	template <typename IO> static inline bool io(IO f, Settings &settings, YAML::Node &node) {
 		return f(settings.normalKBPower, node["normalKBPower"]) &&
@@ -58,7 +70,9 @@ inline struct Settings {
 			   f(settings.heightThreshold, node["heightThreshold"]) &&
 			   f(settings.heightCap, node["heightCap"]) &&
 			   f(settings.projectilesBypassHurtCooldown, node["projectilesBypassHurtCooldown"]) &&
-			   f(settings.netheriteArmorKBResistance, node["netheriteArmorKBResistance"]);
+			   f(settings.netheriteArmorKBResistance, node["netheriteArmorKBResistance"]) &&
+			   f(settings.playersCanCrit, node["playersCanCrit"]) &&
+			   f(settings.hurtCooldownTicks, node["hurtCooldownTicks"]);
 		}
 } settings;
 
