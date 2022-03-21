@@ -10,7 +10,7 @@ void dllexit() {}
 
 static std::random_device rd;
 static std::mt19937 gen(rd());
-static std::uniform_real_distribution<float> generateFloat(-1.f, 1.f);
+static std::uniform_real_distribution<float> generateFloat(0.f, 1.f);
 
 namespace LegacyKnockback {
 
@@ -531,9 +531,11 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 						float dx = thatPos.x - thisPos.x;
 						float dz = thatPos.z - thisPos.z;
 						float distSqr = (float)(std::sqrtf((dx * dx) + (dz * dz)));
-						if (distSqr > 0.f) {
-							this->mHurtDirection = (float)(std::atan2f(dz, dx) * RADIAN_DEGREES) - this->mRot.y;
+						if (distSqr < 0.0001f) {
+							dx = (generateFloat(gen) - generateFloat(gen)) * 0.01f;
+							dz = (generateFloat(gen) - generateFloat(gen)) * 0.01f;
 						}
+						this->mHurtDirection = (float)(std::atan2f(dz, dx) * RADIAN_DEGREES) - this->mRot.y;
 
 						/*float power = 1.f + (float)attacker->getMeleeKnockbackBonus();
 						if (attacker->isSprinting()) {
@@ -558,7 +560,7 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 				}
 			}
 			else {
-				this->mHurtDirection = (float)((generateFloat(gen) * 2.f) * 180.f);
+				this->mHurtDirection = (float)((int32_t)(generateFloat(gen) * 2.f) * 180.f);
 			}
 		}
 
