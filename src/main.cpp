@@ -459,16 +459,17 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 	bool isNewEntityAttack = ((this->mLastHurtCause != ActorDamageCause::EntityAttack) && (cause == ActorDamageCause::EntityAttack));
 
 	if ((cause == ActorDamageCause::Suicide) || (this->mInvulnerableTime <= 5) || isNewEntityAttack) {
-		//hurt                     = true;
-		hurt                     = (settings.projectilesBypassHurtCooldown ? true : (this->mInvulnerableTime <= 0)); // vanilla has this set to true
-		enoughDamage             = (damage > 0);
-		this->mLastHurt          = damage;
-		this->mLastHurtCause     = cause;
-		this->mLastHealth        = currentHealth;
-		this->mLastHurtTimestamp = currentTick;
-		this->mInvulnerableTime  = settings.hurtCooldownTicks; // defaults to 10 when hurt
-		this->mHurtTime          = settings.hurtCooldownTicks; // defaults to 10 when hurt
-		this->mHurtDuration      = settings.hurtCooldownTicks; // defaults to 10 when hurt
+		if (settings.projectilesBypassHurtCooldown || (this->mInvulnerableTime <= 0)) { // custom check
+			hurt                     = true;
+			enoughDamage             = (damage > 0);
+			this->mLastHurt          = damage;
+			this->mLastHurtCause     = cause;
+			this->mLastHealth        = currentHealth;
+			this->mLastHurtTimestamp = currentTick;
+			this->mInvulnerableTime  = settings.hurtCooldownTicks; // defaults to 10 when hurt
+			this->mHurtTime          = settings.hurtCooldownTicks; // defaults to 10 when hurt
+			this->mHurtDuration      = settings.hurtCooldownTicks; // defaults to 10 when hurt
+		}
 	}
 	else if ((this->mInvulnerableTime == settings.hurtCooldownTicks) && this->mChainedDamageEffects) { // defaults to 10 when hurt
 		chainedHurt              = (damage > 0);
