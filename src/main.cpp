@@ -112,7 +112,9 @@ void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx
 	//auto newDelta = stateVector.mPosDelta;
 	auto newDelta = getMobPosDelta(_this);
 
-	newDelta *= friction;
+	if (!_this->mTeleportedThisTick) {
+		newDelta *= friction;
+	}
 
 	newDelta.x -= dx * vector * power;
 	newDelta.y += height;
@@ -220,21 +222,26 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 	float vector = std::sqrtf((dx * dx) + (dz * dz));
 	if (vector < 0.0001f) return;
 	vector = 1.f / vector;
-	float friction = 1.f / settings.KBFriction;
+	float friction = 1.f;
 
 	//auto newDelta = _this->mStateVectorComponent.mPosDelta;
 	auto newDelta = _this->getRawPosDelta();
 
-	// clamp pos delta
-	float d = std::sqrtf((newDelta.x * newDelta.x) + (newDelta.z * newDelta.z));
-	if (d > settings.maxHorizontalDisplacement) {
-		newDelta.normalizeXZ();
-		newDelta.x *= settings.maxHorizontalDisplacement;
-		newDelta.z *= settings.maxHorizontalDisplacement;
-	}
+	if (!_this->mTeleportedThisTick) {
 
-	newDelta.x *= friction;
-	newDelta.z *= friction;
+		friction = 1.f / settings.KBFriction;
+
+		// clamp pos delta
+		float d = std::sqrtf((newDelta.x * newDelta.x) + (newDelta.z * newDelta.z));
+		if (d > settings.maxHorizontalDisplacement) {
+			newDelta.normalizeXZ();
+			newDelta.x *= settings.maxHorizontalDisplacement;
+			newDelta.z *= settings.maxHorizontalDisplacement;
+		}
+		
+		newDelta.x *= friction;
+		newDelta.z *= friction;
+	}
 
 	newDelta.x -= dx * vector * power;
 	newDelta.z -= dz * vector * power;
@@ -393,6 +400,7 @@ TInstanceHook(bool, "?_hurt@Mob@@MEAA_NAEBVActorDamageSource@@H_N1@Z",
 
 	auto cause = source.mCause;
 	bool isNewEntityAttack = ((this->mLastHurtCause != ActorDamageCause::EntityAttack) && (cause == ActorDamageCause::EntityAttack));
+	float halfOfHurtCooldown = (float)(settings.hurtCooldownTicks * 0.5f);
 
 	if (cause == ActorDamageCause::Suicide) {
 		this->mLastHurtCause = ActorDamageCause::None;
@@ -401,7 +409,7 @@ TInstanceHook(bool, "?_hurt@Mob@@MEAA_NAEBVActorDamageSource@@H_N1@Z",
 	else if ((this->mInvulnerableTime == settings.hurtCooldownTicks) && this->mChainedDamageEffects) { // defaults to 10 when hurt
 		damage += this->mLastHurt;
 	}
-	else if (this->mInvulnerableTime <= 5) {
+	else if ((float)(this->mInvulnerableTime) <= halfOfHurtCooldown) {
 		if ((this->mInvulnerableTime > 0) && !isNewEntityAttack) {
 			return false;
 		}
@@ -457,19 +465,20 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 	bool enoughDamage = false;
 	auto cause = source.mCause;
 	bool isNewEntityAttack = ((this->mLastHurtCause != ActorDamageCause::EntityAttack) && (cause == ActorDamageCause::EntityAttack));
+	float halfOfHurtCooldown = (float)(settings.hurtCooldownTicks * 0.5f);
 
-	if ((cause == ActorDamageCause::Suicide) || (this->mInvulnerableTime <= 5) || isNewEntityAttack) {
-		if (settings.projectilesBypassHurtCooldown || (this->mInvulnerableTime <= 0)) { // custom check
-			hurt                     = true;
-			enoughDamage             = (damage > 0);
-			this->mLastHurt          = damage;
-			this->mLastHurtCause     = cause;
-			this->mLastHealth        = currentHealth;
-			this->mLastHurtTimestamp = currentTick;
-			this->mInvulnerableTime  = settings.hurtCooldownTicks; // defaults to 10 when hurt
-			this->mHurtTime          = settings.hurtCooldownTicks; // defaults to 10 when hurt
-			this->mHurtDuration      = settings.hurtCooldownTicks; // defaults to 10 when hurt
-		}
+	int32_t prevHurtCooldownTicks = this->mInvulnerableTime;
+
+	if ((cause == ActorDamageCause::Suicide) || ((float)(this->mInvulnerableTime) <= halfOfHurtCooldown) || isNewEntityAttack) {
+		hurt                     = true;
+		enoughDamage             = (damage > 0);
+		this->mLastHurt          = damage;
+		this->mLastHurtCause     = cause;
+		this->mLastHealth        = currentHealth;
+		this->mLastHurtTimestamp = currentTick;
+		this->mInvulnerableTime  = settings.hurtCooldownTicks; // defaults to 10 when hurt
+		this->mHurtTime          = settings.hurtCooldownTicks; // defaults to 10 when hurt
+		this->mHurtDuration      = settings.hurtCooldownTicks; // defaults to 10 when hurt
 	}
 	else if ((this->mInvulnerableTime == settings.hurtCooldownTicks) && this->mChainedDamageEffects) { // defaults to 10 when hurt
 		chainedHurt              = (damage > 0);
@@ -479,7 +488,7 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 		this->mLastHealth        = currentHealth;
 		this->mLastHurtTimestamp = currentTick;
 	}
-	else if (this->mInvulnerableTime > 5) {
+	else if ((float)(this->mInvulnerableTime) > halfOfHurtCooldown) {
 		if ((damage <= this->mLastHurt) && !isNewEntityAttack) {
 			return false;
 		}
@@ -508,7 +517,7 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 	this->mHurtDirection = 0.f;
 	if (!this->hasEffect(*MobEffect::HEAL)) { // instant health effect
 
-		if (hurt) {
+		if (hurt && (settings.projectilesBypassHurtCooldown || (prevHurtCooldownTicks <= 0))) { // vanilla has this as just "if (hurt) {...}"
 
 			if ((currentHealth > 0) || ((currentHealth <= 0) && this->checkTotemDeathProtection(source))) {
 				lvl->broadcastActorEvent(*this, ActorEvent::HURT, -1); // (int32_t)cause
