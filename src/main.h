@@ -46,7 +46,6 @@ inline struct Settings {
 	bool useCustomHeightCap            = true;
 	float heightThreshold              = 0.4f;
 	float heightCap                    = 0.4f;
-	bool projectilesBypassHurtCooldown = false;
 	float netheriteArmorKBResistance   = 0.0f;
 	bool playersCanCrit                = true;
 	uint32_t hurtCooldownTicks         = 10;
@@ -69,7 +68,6 @@ inline struct Settings {
 			   f(settings.useCustomHeightCap, node["useCustomHeightCap"]) &&
 			   f(settings.heightThreshold, node["heightThreshold"]) &&
 			   f(settings.heightCap, node["heightCap"]) &&
-			   f(settings.projectilesBypassHurtCooldown, node["projectilesBypassHurtCooldown"]) &&
 			   f(settings.netheriteArmorKBResistance, node["netheriteArmorKBResistance"]) &&
 			   f(settings.playersCanCrit, node["playersCanCrit"]) &&
 			   f(settings.hurtCooldownTicks, node["hurtCooldownTicks"]);

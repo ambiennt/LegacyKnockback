@@ -6,8 +6,6 @@ DEFAULT_SETTINGS(settings);
 void dllenter() {}
 void dllexit() {}
 
-#define RADIAN_DEGREES 57.2957795131
-
 static std::random_device rd;
 static std::mt19937 gen(rd());
 static std::uniform_real_distribution<float> generateFloat(0.f, 1.f);
@@ -48,7 +46,7 @@ Vec3 getMobPosDelta(Mob *_this) {
 
 void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx, float dz) {
 
-	float knockbackResistanceValue = _this->getAttributeInstanceFromId(AttributeID::KnockbackResistance)->currentVal;
+	float knockbackResistanceValue = _this->getAttributeInstanceFromId(AttributeID::KnockbackResistance)->mCurrentVal;
 	if (knockbackResistanceValue >= 1.f) return;
 
 	auto lvl = LocateService<Level>();
@@ -124,7 +122,7 @@ void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx
 		newDelta.y = heightCap;
 	}
 
-	if (_this->getHealth() <= 0) {
+	if (_this->getHealthAsInt() <= 0) {
 		_this->mIsKnockedBackOnDeath = true;
 	}
 
@@ -133,7 +131,7 @@ void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx
 
 void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, float dx, float dz) {
 
-	float knockbackResistanceValue = _this->getAttributeInstanceFromId(AttributeID::KnockbackResistance)->currentVal;
+	float knockbackResistanceValue = _this->getAttributeInstanceFromId(AttributeID::KnockbackResistance)->mCurrentVal;
 	if (knockbackResistanceValue >= 1.f) return;
 
 	auto lvl = LocateService<Level>();
@@ -266,7 +264,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 
 	// client ignores motion packets if it's dead anyway so this seems to be pointless code for players
 	// but keeping it in for the sake of vanilla consistency in case it gets used elsewhere
-	if (_this->getHealth() <= 0) {
+	if (_this->getHealthAsInt() <= 0) {
 		_this->mIsKnockedBackOnDeath = true;
 	}
 
@@ -379,7 +377,7 @@ TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor)
 				(selectedItemCopy.mCount > 0) &&
 				!this->isInCreativeOrCreativeViewerMode()) {
 
-				if (this->getHealth() > 0) {
+				if (this->getHealthAsInt() > 0) {
 					selectedItemCopy.getItem()->hurtEnemy(selectedItemCopy, (Mob*)&actor, this);
 				}
 
@@ -389,7 +387,7 @@ TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor)
 			}
 		}
 	}
-	if (targetIsInstanceOfPlayer) { // only stop sprint when attacking players
+	if (settings.useJavaSprintReset && targetIsInstanceOfPlayer) { // only stop sprint when attacking players
 		this->setSprinting(false);
 	}
 	return true;
@@ -399,8 +397,6 @@ TInstanceHook(bool, "?_hurt@Mob@@MEAA_NAEBVActorDamageSource@@H_N1@Z",
 	Mob, ActorDamageSource &source, int32_t damage, bool knock, bool ignite) {
 
 	auto cause = source.mCause;
-	bool isNewEntityAttack = ((this->mLastHurtCause != ActorDamageCause::EntityAttack) && (cause == ActorDamageCause::EntityAttack));
-	float halfOfHurtCooldown = (float)(settings.hurtCooldownTicks * 0.5f);
 
 	if (cause == ActorDamageCause::Suicide) {
 		this->mLastHurtCause = ActorDamageCause::None;
@@ -409,14 +405,11 @@ TInstanceHook(bool, "?_hurt@Mob@@MEAA_NAEBVActorDamageSource@@H_N1@Z",
 	else if ((this->mInvulnerableTime == settings.hurtCooldownTicks) && this->mChainedDamageEffects) { // defaults to 10 when hurt
 		damage += this->mLastHurt;
 	}
-	else if ((float)(this->mInvulnerableTime) <= halfOfHurtCooldown) {
-		if ((this->mInvulnerableTime > 0) && !isNewEntityAttack) {
-			return false;
-		}
+	else if ((float)(this->mInvulnerableTime) <= 0) {
 		this->mLastHurt = 0;
 		this->mLastHurtCause = ActorDamageCause::None;
 	}
-	else if ((damage <= this->mLastHurt) && !isNewEntityAttack) {
+	else if (damage <= this->mLastHurt) {
 		return false;
 	}
 
@@ -456,25 +449,19 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 		return false;
 	}
 
+	auto cause = source.mCause;
 	auto lvl = LocateService<Level>();
-	int32_t currentHealth = this->getHealth();
 	uint64_t currentTick = lvl->getServerTick();
-
 	bool hurt = false;
 	bool chainedHurt = false;
 	bool enoughDamage = false;
-	auto cause = source.mCause;
-	bool isNewEntityAttack = ((this->mLastHurtCause != ActorDamageCause::EntityAttack) && (cause == ActorDamageCause::EntityAttack));
-	float halfOfHurtCooldown = (float)(settings.hurtCooldownTicks * 0.5f);
 
-	int32_t prevHurtCooldownTicks = this->mInvulnerableTime;
-
-	if ((cause == ActorDamageCause::Suicide) || ((float)(this->mInvulnerableTime) <= halfOfHurtCooldown) || isNewEntityAttack) {
+	if ((cause == ActorDamageCause::Suicide) || ((float)(this->mInvulnerableTime) <= 0)) {
 		hurt                     = true;
 		enoughDamage             = (damage > 0);
 		this->mLastHurt          = damage;
 		this->mLastHurtCause     = cause;
-		this->mLastHealth        = currentHealth;
+		this->mLastHealth        = this->getHealthAsInt();
 		this->mLastHurtTimestamp = currentTick;
 		this->mInvulnerableTime  = settings.hurtCooldownTicks; // defaults to 10 when hurt
 		this->mHurtTime          = settings.hurtCooldownTicks; // defaults to 10 when hurt
@@ -485,11 +472,11 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 		enoughDamage             = (damage > 0);
 		this->mLastHurt          = damage;
 		this->mLastHurtCause     = cause;
-		this->mLastHealth        = currentHealth;
+		this->mLastHealth        = this->getHealthAsInt();
 		this->mLastHurtTimestamp = currentTick;
 	}
-	else if ((float)(this->mInvulnerableTime) > halfOfHurtCooldown) {
-		if ((damage <= this->mLastHurt) && !isNewEntityAttack) {
+	else if ((float)(this->mInvulnerableTime) > 0) {
+		if (damage <= this->mLastHurt) {
 			return false;
 		}
 		this->mLastHurt          = damage;
@@ -517,9 +504,9 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 	this->mHurtDirection = 0.f;
 	if (!this->hasEffect(*MobEffect::HEAL)) { // instant health effect
 
-		if (hurt && (settings.projectilesBypassHurtCooldown || (prevHurtCooldownTicks <= 0))) { // vanilla has this as just "if (hurt) {...}"
+		if (hurt) {
 
-			if ((currentHealth > 0) || ((currentHealth <= 0) && this->checkTotemDeathProtection(source))) {
+			if ((this->getHealthAsInt() > 0) || ((this->getHealthAsInt() <= 0) && this->checkTotemDeathProtection(source))) {
 				lvl->broadcastActorEvent(*this, ActorEvent::HURT, -1); // (int32_t)cause
 			}
 
@@ -574,7 +561,7 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 			}
 		}
 
-		if ((currentHealth <= 0) && !this->checkTotemDeathProtection(source)) {
+		if ((this->getHealthAsInt() <= 0) && !this->checkTotemDeathProtection(source)) {
 			this->die(source);
 			return true;
 		}
