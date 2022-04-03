@@ -32,37 +32,25 @@ float getPunchEnchantmentMultiplier(Actor* projectile) {
 	return 1.f;
 }
 
-// the pos delta for the mob's state vector seems to be inconsistent,
-// so I think its better to calculate manually
-Vec3 getMobPosDelta(Mob *_this) {
-	Vec3 posDelta;
-	const auto& prevPos = _this->getPosOld();
-	const auto& currPos = _this->getPos();
-	posDelta.x = currPos.x - prevPos.x;
-	posDelta.y = currPos.y - prevPos.y;
-	posDelta.z = currPos.z - prevPos.z;
-	return posDelta;
-}
-
 void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx, float dz) {
 
-	float knockbackResistanceValue = _this->getAttributeInstanceFromId(AttributeID::KnockbackResistance)->mCurrentVal;
+	float knockbackResistanceValue = _this->getMutableAttribute(AttributeID::KnockbackResistance)->mCurrentValue;
 	if (knockbackResistanceValue >= 1.f) return;
 
-	auto lvl = LocateService<Level>();
+	auto& lvl = *_this->mLevel;
 
 	float power = 0.4f;
 	float height = 0.4f;
 	float heightCap = 0.45f;
 
 	if (source.isChildEntitySource()) {
-		auto damager = lvl->fetchEntity(source.getDamagingEntityUniqueID(), false);
+		auto damager = lvl.fetchEntity(source.getDamagingEntityUniqueID(), false);
 		power *= LegacyKnockback::getPunchEnchantmentMultiplier(damager);
 	}
 
 	else if (source.isEntitySource()) {
 
-		auto attacker = lvl->fetchEntity(source.getEntityUniqueID(), false);
+		auto attacker = lvl.fetchEntity(source.getEntityUniqueID(), false);
 		if (attacker && attacker->isInstanceOfMob()) {
 
 			switch (attacker->getEntityTypeId()) {
@@ -108,7 +96,7 @@ void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx
 
 	//auto& stateVector = _this->mStateVectorComponent;
 	//auto newDelta = stateVector.mPosDelta;
-	auto newDelta = getMobPosDelta(_this);
+	auto newDelta = _this->getRawActorPosDelta();
 
 	if (!_this->mTeleportedThisTick) {
 		newDelta *= friction;
@@ -131,10 +119,10 @@ void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx
 
 void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, float dx, float dz) {
 
-	float knockbackResistanceValue = _this->getAttributeInstanceFromId(AttributeID::KnockbackResistance)->mCurrentVal;
+	float knockbackResistanceValue = _this->getMutableAttribute(AttributeID::KnockbackResistance)->mCurrentValue;
 	if (knockbackResistanceValue >= 1.f) return;
 
-	auto lvl = LocateService<Level>();
+	auto& lvl = *_this->mLevel;
 
 	// initializations
 	float power = settings.normalKBPower;
@@ -142,7 +130,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 	float heightCap = settings.heightCap;
 
 	if (source.isChildEntitySource()) {
-		auto damager = lvl->fetchEntity(source.getDamagingEntityUniqueID(), false);
+		auto damager = lvl.fetchEntity(source.getDamagingEntityUniqueID(), false);
 		if (damager) {
 
 			if (settings.customProjectileKBEnabled) {
@@ -170,7 +158,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 
 	else if (source.isEntitySource()) {
 
-		auto attacker = lvl->fetchEntity(source.getEntityUniqueID(), false);
+		auto attacker = lvl.fetchEntity(source.getEntityUniqueID(), false);
 		if (attacker && attacker->isInstanceOfMob()) {
 
 			switch (attacker->getEntityTypeId()) {
@@ -199,7 +187,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 			}
 
 			// attacking on the same tick that you receive knockback will set lower values (aka "reducing")
-			uint64_t currentTick = lvl->getServerTick();
+			uint64_t currentTick = lvl.getServerTick();
 			if ((currentTick - _this->EZPlayerFields->mLastAttackedActorTimestamp) <= 1) {
 				power *= settings.KBReductionFactor;
 			}
@@ -223,7 +211,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 	float friction = 1.f;
 
 	//auto newDelta = _this->mStateVectorComponent.mPosDelta;
-	auto newDelta = _this->getRawPosDelta();
+	auto newDelta = _this->getRawPlayerPosDelta();
 
 	if (!_this->mTeleportedThisTick) {
 
@@ -315,12 +303,12 @@ TInstanceHook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", ArmorIte
 
 TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor) {
 
-	auto lvl = LocateService<Level>();
+	auto& lvl = *this->mLevel;
 	bool targetIsInstanceOfPlayer = actor.isInstanceOfPlayer();
 	bool targetIsInstanceOfMob = actor.isInstanceOfMob();
 
 	// custom stuff
-	this->EZPlayerFields->mLastAttackedActorTimestamp = lvl->getServerTick();
+	this->EZPlayerFields->mLastAttackedActorTimestamp = lvl.getServerTick();
 
 	if (targetIsInstanceOfMob &&
 		!targetIsInstanceOfPlayer &&
@@ -334,7 +322,7 @@ TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor)
 			return false;
 		}
 
-		bool isPvpEnabled = lvl->getGameRules().getGameRuleValue<bool>(GameRulesIndex::Pvp);
+		bool isPvpEnabled = lvl.getGameRuleValue<bool>(GameRulesIndex::Pvp);
 		if (!isPvpEnabled) {
 			return false;
 		}
@@ -375,7 +363,7 @@ TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor)
 				selectedItemCopy.mItem &&
 				!selectedItemCopy.isNull() &&
 				(selectedItemCopy.mCount > 0) &&
-				!this->isInCreativeOrCreativeViewerMode()) {
+				!this->isInCreativeMode()) {
 
 				if (this->getHealthAsInt() > 0) {
 					selectedItemCopy.getItem()->hurtEnemy(selectedItemCopy, (Mob*)&actor, this);
@@ -422,7 +410,7 @@ TInstanceHook(bool, "?_hurt@Mob@@MEAA_NAEBVActorDamageSource@@H_N1@Z",
 
 	if (source.isEntitySource()) {
 
-		auto attacker = LocateService<Level>()->fetchEntity(source.getEntityUniqueID(), false);
+		auto attacker = this->mLevel->fetchEntity(source.getEntityUniqueID(), false);
 		if (attacker) {
 			if (attacker->isInstanceOfMob()) {
 				if (attacker->isInstanceOfPlayer()) {
@@ -450,8 +438,8 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 	}
 
 	auto cause = source.mCause;
-	auto lvl = LocateService<Level>();
-	uint64_t currentTick = lvl->getServerTick();
+	auto& lvl = *this->mLevel;
+	uint64_t currentTick = lvl.getServerTick();
 	bool hurt = false;
 	bool chainedHurt = false;
 	bool enoughDamage = false;
@@ -486,8 +474,8 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 
 	if (!this->isFireImmune()) {
 
-		auto sourceActor = lvl->fetchEntity(source.getEntityUniqueID(), false);
-		auto childActor = lvl->fetchEntity(source.getDamagingEntityUniqueID(), false);
+		auto sourceActor = lvl.fetchEntity(source.getEntityUniqueID(), false);
+		auto childActor = lvl.fetchEntity(source.getDamagingEntityUniqueID(), false);
 
 		int32_t sourceActorBurnDuration = LegacyKnockback::getOnFireTime(sourceActor);
 		int32_t childActorBurnDuration = LegacyKnockback::getOnFireTime(childActor);
@@ -507,7 +495,7 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 		if (hurt) {
 
 			if ((this->getHealthAsInt() > 0) || ((this->getHealthAsInt() <= 0) && this->checkTotemDeathProtection(source))) {
-				lvl->broadcastActorEvent(*this, ActorEvent::HURT, -1); // (int32_t)cause
+				lvl.broadcastActorEvent(*this, ActorEvent::HURT, -1); // (int32_t)cause
 			}
 
 			this->markHurt();
@@ -517,7 +505,7 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 				// note to self about getEntityUniqueID() vs getDamagingEntityUniqueID()
 				// - getEntityUniqueID() will always refer to the parent actor (example: the player who shot a projectile)
 				// - getDamagingEntityUniqueID() will refer to the child actor (ex: a projectile) if it exists, else it will refer to the parent actor
-				auto attacker = lvl->fetchEntity(source.getEntityUniqueID(), false);
+				auto attacker = lvl.fetchEntity(source.getEntityUniqueID(), false);
 
 				if (attacker) {
 

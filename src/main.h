@@ -74,4 +74,14 @@ inline struct Settings {
 		}
 } settings;
 
+
+namespace LegacyKnockback {
+
+int32_t getOnFireTime(Actor *projectile);
+float getPunchEnchantmentMultiplier(Actor* projectile);
+void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx, float dz);
+void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, float dx, float dz);
+
+}
+
 DEF_LOGGER("LegacyKnockback");
