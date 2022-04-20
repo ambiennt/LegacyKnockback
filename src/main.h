@@ -34,8 +34,10 @@ inline struct Settings {
 	float additionalWTapKBPower        = 0.4f;
 	float additionalWTapKBHeight       = 0.0f;
 	float KBReductionFactor            = 0.6f;
-	float KBFriction                   = 2.0f;
+	float horizontalKBFriction         = 2.0f;
+	float verticalKBFriction           = 2.0f;
 	float maxHorizontalDisplacement    = 0.2f;
+	float maxVerticalDisplacement      = 0.25f;
 	bool customProjectileKBEnabled     = false;
 	float comboProjectileKBPower       = 0.4f;
 	float comboProjectileKBHeight      = 0.4f;
@@ -56,8 +58,10 @@ inline struct Settings {
 			   f(settings.additionalWTapKBPower, node["additionalWTapKBPower"]) &&
 			   f(settings.additionalWTapKBHeight, node["additionalWTapKBHeight"]) &&
 			   f(settings.KBReductionFactor, node["KBReductionFactor"]) &&
-			   f(settings.KBFriction, node["KBFriction"]) &&
+			   f(settings.horizontalKBFriction, node["horizontalKBFriction"]) &&
+			   f(settings.verticalKBFriction, node["verticalKBFriction"]) &&
 			   f(settings.maxHorizontalDisplacement, node["maxHorizontalDisplacement"]) &&
+			   f(settings.maxVerticalDisplacement, node["maxVerticalDisplacement"]) &&
 			   f(settings.customProjectileKBEnabled, node["customProjectileKBEnabled"]) &&
 			   f(settings.comboProjectileKBPower, node["comboProjectileKBPower"]) &&
 			   f(settings.comboProjectileKBHeight, node["comboProjectileKBHeight"]) &&
@@ -73,7 +77,6 @@ inline struct Settings {
 			   f(settings.hurtCooldownTicks, node["hurtCooldownTicks"]);
 		}
 } settings;
-
 
 namespace LegacyKnockback {
 

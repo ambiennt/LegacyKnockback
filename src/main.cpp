@@ -128,6 +128,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 	float power = settings.normalKBPower;
 	float height = settings.normalKBHeight;
 	float heightCap = settings.heightCap;
+	float heightThreshold = settings.heightThreshold;
 
 	if (source.isChildEntitySource()) {
 		auto damager = lvl.fetchEntity(source.getDamagingEntityUniqueID(), false);
@@ -208,14 +209,16 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 	float vector = std::sqrtf((dx * dx) + (dz * dz));
 	if (vector < 0.0001f) return;
 	vector = 1.f / vector;
-	float friction = 1.f;
+	float horizontalFriction = 1.f;
+	float verticalFriction = 1.f;
 
 	//auto newDelta = _this->mStateVectorComponent.mPosDelta;
 	auto newDelta = _this->getRawPlayerPosDelta();
 
 	if (!_this->mTeleportedThisTick) {
 
-		friction = 1.f / settings.KBFriction;
+		horizontalFriction = 1.f / settings.horizontalKBFriction;
+		verticalFriction = 1.f / settings.verticalKBFriction;
 
 		// clamp pos delta
 		float d = std::sqrtf((newDelta.x * newDelta.x) + (newDelta.z * newDelta.z));
@@ -224,9 +227,10 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 			newDelta.x *= settings.maxHorizontalDisplacement;
 			newDelta.z *= settings.maxHorizontalDisplacement;
 		}
-		
-		newDelta.x *= friction;
-		newDelta.z *= friction;
+		newDelta.y = (float)std::clamp(newDelta.y, -settings.maxVerticalDisplacement, settings.maxVerticalDisplacement);
+
+		newDelta.x *= horizontalFriction;
+		newDelta.z *= horizontalFriction;
 	}
 
 	newDelta.x -= dx * vector * power;
@@ -234,20 +238,24 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 
 	// heightcap stuff
 	if (settings.useJavaHeightCap) {
-		newDelta.y *= friction;
+		newDelta.y *= verticalFriction;
 		newDelta.y += height;
 
-		if (newDelta.y > heightCap) {
+		if (newDelta.y > heightThreshold) {
 			newDelta.y = heightCap;
 		}
 	}
-	else {
-		float oldPosDeltaY = newDelta.y;
-		newDelta.y = height;
-
-		if (settings.useCustomHeightCap && ((oldPosDeltaY + newDelta.y) > settings.heightThreshold)) {
+	else if (settings.useCustomHeightCap) {
+		float oldDeltaY = newDelta.y;
+		newDelta.y *= verticalFriction;
+		newDelta.y += height;
+		
+		if ((newDelta.y + oldDeltaY) > heightThreshold) {
 			newDelta.y = heightCap;
 		}
+	}
+	else { // if no heightcap is configured
+          newDelta.y = height;
 	}
 
 	// client ignores motion packets if it's dead anyway so this seems to be pointless code for players
