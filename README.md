@@ -26,14 +26,14 @@ my personal favorite config:
     additionalWTapKBHeight: 0.05
     KBReductionFactor: 0.8
     horizontalKBFriction: 1.6
-    verticalKBFriction: 5
+    verticalKBFriction: 4.5
     maxHorizontalDisplacement: 0.25
     maxVerticalDisplacement: 0.2
     customProjectileKBEnabled: true
-    comboProjectileKBPower: 0.425
-    comboProjectileKBHeight: 0.375
+    comboProjectileKBPower: 0.42
+    comboProjectileKBHeight: 0.38
     enderpearlKBPower: 0.8
-    enderpearlKBHeight: 0.375
+    enderpearlKBHeight: 0.38
     useJavaSprintReset: true
     useJavaHeightCap: false
     useCustomHeightCap: true
