@@ -50,7 +50,7 @@ inline struct Settings {
 	float heightCap                    = 0.4f;
 	float netheriteArmorKBResistance   = 0.0f;
 	bool playersCanCrit                = true;
-	uint32_t hurtCooldownTicks         = 10;
+	int32_t hurtCooldownTicks          = 10;
 
 	template <typename IO> static inline bool io(IO f, Settings &settings, YAML::Node &node) {
 		return f(settings.normalKBPower, node["normalKBPower"]) &&
@@ -80,11 +80,15 @@ inline struct Settings {
 
 namespace LegacyKnockback {
 
+static std::random_device rd;
+static std::mt19937 rng(rd());
+
+float generateRandomFloat();
 int32_t getOnFireTime(Actor *projectile);
 float getPunchEnchantmentMultiplier(Actor* projectile);
 void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx, float dz);
 void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, float dx, float dz);
 
-}
+} // namespace LegacyKnockback
 
 DEF_LOGGER("LegacyKnockback");

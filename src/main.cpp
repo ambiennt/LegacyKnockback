@@ -6,11 +6,12 @@ DEFAULT_SETTINGS(settings);
 void dllenter() {}
 void dllexit() {}
 
-static std::random_device rd;
-static std::mt19937 gen(rd());
-static std::uniform_real_distribution<float> generateFloat(0.f, 1.f);
-
 namespace LegacyKnockback {
+
+float generateRandomFloat() {
+	std::uniform_real_distribution<float> genFloatFunc(0.f, 1.f);
+	return genFloatFunc(rng);
+}
 
 int32_t getOnFireTime(Actor *projectile) {
 	if (!projectile) return 0;
@@ -249,7 +250,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 		float oldDeltaY = newDelta.y;
 		newDelta.y *= verticalFriction;
 		newDelta.y += height;
-		
+
 		if ((newDelta.y + oldDeltaY) > heightThreshold) {
 			newDelta.y = heightCap;
 		}
@@ -271,7 +272,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 	_this->sendNetworkPacket(motionPkt);
 }
 
-}
+} // namespace LegacyKnockback
 
 // KnockbackRules is a namespace, not a class
 //THook(bool, "?useLegacyKnockback@KnockbackRules@@YA_NAEBVLevel@@@Z", void* level) { return true; }
@@ -525,8 +526,8 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 						float dz = thatPos.z - thisPos.z;
 						float distSqr = (float)(std::sqrtf((dx * dx) + (dz * dz)));
 						if (distSqr < 0.0001f) {
-							dx = (generateFloat(gen) - generateFloat(gen)) * 0.01f;
-							dz = (generateFloat(gen) - generateFloat(gen)) * 0.01f;
+							dx = (LegacyKnockback::generateRandomFloat() - LegacyKnockback::generateRandomFloat()) * 0.01f;
+							dz = (LegacyKnockback::generateRandomFloat() - LegacyKnockback::generateRandomFloat()) * 0.01f;
 						}
 						this->mHurtDirection = (float)(std::atan2f(dz, dx) * RADIAN_DEGREES) - this->mRot.y;
 
@@ -553,7 +554,7 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 				}
 			}
 			else {
-				this->mHurtDirection = (float)((int32_t)(generateFloat(gen) * 2.f) * 180.f);
+				this->mHurtDirection = (float)((int32_t)(LegacyKnockback::generateRandomFloat() * 2.f) * 180.f);
 			}
 		}
 
