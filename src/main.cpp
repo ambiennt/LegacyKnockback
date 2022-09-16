@@ -6,14 +6,12 @@ DEFAULT_SETTINGS(settings);
 void dllenter() {}
 void dllexit() {}
 
-namespace LegacyKnockback {
-
-float generateRandomFloat() {
-	std::uniform_real_distribution<float> genFloatFunc(0.f, 1.f);
-	return genFloatFunc(rng);
+float LegacyKnockback::generateRandomFloat(float min, float max) {
+	std::uniform_real_distribution<float> genFloatFunc(min, max);
+	return genFloatFunc(RNG_INSTANCE);
 }
 
-int32_t getOnFireTime(Actor *projectile) {
+int32_t LegacyKnockback::getOnFireTime(Actor *projectile) {
 	if (!projectile) return 0;
 	auto component = projectile->tryGetComponent<ProjectileComponent>();
 	if (component) {
@@ -24,7 +22,7 @@ int32_t getOnFireTime(Actor *projectile) {
 	return 0;
 }
 
-float getPunchEnchantmentMultiplier(Actor* projectile) {
+float LegacyKnockback::getPunchEnchantmentMultiplier(Actor* projectile) {
 	if (!projectile) return 1.f;
 	auto component = projectile->tryGetComponent<ProjectileComponent>();
 	if (component) {
@@ -33,7 +31,7 @@ float getPunchEnchantmentMultiplier(Actor* projectile) {
 	return 1.f;
 }
 
-void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx, float dz) {
+void LegacyKnockback::calculateMobKnockback(Mob *_this, const ActorDamageSource &source, float dx, float dz) {
 
 	float knockbackResistanceValue = _this->getMutableAttribute(AttributeID::KnockbackResistance)->mCurrentValue;
 	if (knockbackResistanceValue >= 1.f) return;
@@ -69,10 +67,10 @@ void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx
 				}
 				case ActorType::Player_0: {
 					auto playerAttacker = ((Player*)attacker);
-					if (playerAttacker->EZPlayerFields->mHasResetSprint && playerAttacker->isSprinting()) {
+					if (playerAttacker->mEZPlayer->mHasResetSprint && playerAttacker->isSprinting()) {
 						power += 0.4f;
 						height += 0.1f;
-						playerAttacker->EZPlayerFields->mHasResetSprint = false;
+						playerAttacker->mEZPlayer->mHasResetSprint = false;
 					}
 					break;
 				}
@@ -118,7 +116,7 @@ void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx
 	_this->mStateVectorComponent.mPosDelta = newDelta;
 }
 
-void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, float dx, float dz) {
+void LegacyKnockback::calculatePlayerKnockback(Player *_this, const ActorDamageSource &source, float dx, float dz) {
 
 	float knockbackResistanceValue = _this->getMutableAttribute(AttributeID::KnockbackResistance)->mCurrentValue;
 	if (knockbackResistanceValue >= 1.f) return;
@@ -178,10 +176,10 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 				}
 				case ActorType::Player_0: {
 					auto playerAttacker = ((Player*)attacker);
-					if (playerAttacker->EZPlayerFields->mHasResetSprint && playerAttacker->isSprinting()) {
+					if (playerAttacker->mEZPlayer->mHasResetSprint && playerAttacker->isSprinting()) {
 						power += settings.additionalWTapKBPower;
 						height += settings.additionalWTapKBHeight;
-						playerAttacker->EZPlayerFields->mHasResetSprint = false;
+						playerAttacker->mEZPlayer->mHasResetSprint = false;
 					}
 					break;
 				}
@@ -190,7 +188,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 
 			// attacking on the same tick that you receive knockback will set lower values (aka "reducing")
 			uint64_t currentTick = lvl.getServerTick();
-			if ((currentTick - _this->EZPlayerFields->mLastAttackedActorTimestamp) <= 1) {
+			if ((currentTick - _this->mEZPlayer->mLastAttackedActorTimestamp) <= 1) {
 				power *= settings.KBReductionFactor;
 			}
 
@@ -256,7 +254,7 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 		}
 	}
 	else { // if no heightcap is configured
-          newDelta.y = height;
+		  newDelta.y = height;
 	}
 
 	// client ignores motion packets if it's dead anyway so this seems to be pointless code for players
@@ -272,8 +270,6 @@ void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, fl
 	_this->sendNetworkPacket(motionPkt);
 }
 
-} // namespace LegacyKnockback
-
 // KnockbackRules is a namespace, not a class
 //THook(bool, "?useLegacyKnockback@KnockbackRules@@YA_NAEBVLevel@@@Z", void* level) { return true; }
 
@@ -283,22 +279,13 @@ TClasslessInstanceHook(void, "?knockback@ServerPlayer@@UEAAXPEAVActor@@HMMMMM@Z"
 TClasslessInstanceHook(void, "?knockback@Mob@@UEAAXPEAVActor@@HMMMMM@Z",
 	void *source, int32_t damage, float dx, float dz, float power, float height, float heightCap) { return; }
 
-// we need to use custom values for more accurate player pos deltas
-// because the vanilla fields seems to zero the delta out
-TInstanceHook(void, "?normalTick@ServerPlayer@@UEAAXXZ", ServerPlayer) {
-	auto fields = this->EZPlayerFields;
-	fields->mRawPosOld = this->getPos();
-	original(this);
-	fields->mRawPos = this->getPos();
-}
-
 TInstanceHook(void, "?handle@ServerNetworkHandler@@UEAAXAEBVNetworkIdentifier@@AEBVPlayerActionPacket@@@Z",
 	ServerNetworkHandler, NetworkIdentifier const &netId, PlayerActionPacket const &pkt) {
 	original(this, netId, pkt);
 	if (pkt.mAction == PlayerActionType::STOP_SPRINT) {
 		auto player = this->getServerPlayer(netId, pkt.mClientSubId);
 		if (player) {
-			player->EZPlayerFields->mHasResetSprint = true;
+			player->mEZPlayer->mHasResetSprint = true;
 		}
 	}
 }
@@ -317,7 +304,7 @@ TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor)
 	bool targetIsInstanceOfMob = actor.isInstanceOfMob();
 
 	// custom stuff
-	this->EZPlayerFields->mLastAttackedActorTimestamp = lvl.getServerTick();
+	this->mEZPlayer->mLastAttackedActorTimestamp = lvl.getServerTick();
 
 	if (targetIsInstanceOfMob &&
 		!targetIsInstanceOfPlayer &&

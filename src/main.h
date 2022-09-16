@@ -1,9 +1,9 @@
 #pragma once
 
 #include <hook.h>
+#include <base/ezplayer.h>
 #include <base/base.h>
 #include <base/log.h>
-#include <base/playerdb.h>
 #include <yaml.h>
 #include <Math/Vec2.h>
 #include <Math/Vec3.h>
@@ -80,14 +80,13 @@ inline struct Settings {
 
 namespace LegacyKnockback {
 
-static std::random_device rd;
-static std::mt19937 rng(rd());
+inline std::mt19937 RNG_INSTANCE(std::random_device{}());
 
-float generateRandomFloat();
+float generateRandomFloat(float min = 0.f, float max = 1.f);
 int32_t getOnFireTime(Actor *projectile);
 float getPunchEnchantmentMultiplier(Actor* projectile);
-void calculateMobKnockback(Mob *_this, ActorDamageSource const& source, float dx, float dz);
-void calculatePlayerKnockback(Player *_this, ActorDamageSource const& source, float dx, float dz);
+void calculateMobKnockback(Mob *_this, const ActorDamageSource &source, float dx, float dz);
+void calculatePlayerKnockback(Player *_this, const ActorDamageSource &source, float dx, float dz);
 
 } // namespace LegacyKnockback
 
