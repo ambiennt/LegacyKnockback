@@ -6,270 +6,6 @@ DEFAULT_SETTINGS(settings);
 void dllenter() {}
 void dllexit() {}
 
-float LegacyKnockback::generateRandomFloat(float min, float max) {
-	std::uniform_real_distribution<float> genFloatFunc(min, max);
-	return genFloatFunc(RNG_INSTANCE);
-}
-
-int32_t LegacyKnockback::getOnFireTime(Actor *projectile) {
-	if (!projectile) return 0;
-	auto component = projectile->tryGetComponent<ProjectileComponent>();
-	if (component) {
-		if (projectile->isOnFire() || component->mCatchFire) {
-			return (uint32_t)(std::roundf(component->mOnFireTime));
-		}
-	}
-	return 0;
-}
-
-float LegacyKnockback::getPunchEnchantmentMultiplier(Actor* projectile) {
-	if (!projectile) return 1.f;
-	auto component = projectile->tryGetComponent<ProjectileComponent>();
-	if (component) {
-		return std::fmax(1.f, component->mKnockbackForce);
-	}
-	return 1.f;
-}
-
-void LegacyKnockback::calculateMobKnockback(Mob *_this, const ActorDamageSource &source, float dx, float dz) {
-
-	float knockbackResistanceValue = _this->getMutableAttribute(AttributeID::KnockbackResistance)->mCurrentValue;
-	if (knockbackResistanceValue >= 1.f) return;
-
-	auto& lvl = *_this->mLevel;
-
-	float power = 0.4f;
-	float height = 0.4f;
-	float heightCap = 0.45f;
-
-	if (source.isChildEntitySource()) {
-		auto damager = lvl.fetchEntity(source.getDamagingEntityUniqueID(), false);
-		power *= LegacyKnockback::getPunchEnchantmentMultiplier(damager);
-	}
-
-	else if (source.isEntitySource()) {
-
-		auto attacker = lvl.fetchEntity(source.getEntityUniqueID(), false);
-		if (attacker && attacker->isInstanceOfMob()) {
-
-			switch (attacker->getEntityTypeId()) {
-				case ActorType::Dragon: {
-					power *= 4.f;
-					height *= 4.f;
-					heightCap *= 4.f;
-					break;
-				}
-				case ActorType::IronGolem: {
-					power *= 2.f;
-					height *= 2.f;
-					heightCap *= 2.f;
-					break;
-				}
-				case ActorType::Player_0: {
-					auto playerAttacker = ((Player*)attacker);
-					if (playerAttacker->mEZPlayer->mHasResetSprint && playerAttacker->isSprinting()) {
-						power += 0.4f;
-						height += 0.1f;
-						playerAttacker->mEZPlayer->mHasResetSprint = false;
-					}
-					break;
-				}
-				default: break;
-			}
-
-			float kbEnchantmentBonus = (float)(((Mob*)attacker)->getMeleeKnockbackBonus()) * 0.4f;
-			power += kbEnchantmentBonus;
-		}
-	}
-
-	float scaledKnockbackForce = std::fmax(0.f, 1.f - knockbackResistanceValue);
-	if (scaledKnockbackForce < 1.f) {
-		power *= scaledKnockbackForce;
-		height *= scaledKnockbackForce;
-	}
-
-	float vector = std::sqrtf((dx * dx) + (dz * dz));
-	if (vector < 0.0001f) return;
-	vector = 1.f / vector;
-	float friction = 0.5f;
-
-	//auto& stateVector = _this->mStateVectorComponent;
-	//auto newDelta = stateVector.mPosDelta;
-	auto newDelta = _this->getRawActorPosDelta();
-
-	if (!_this->mTeleportedThisTick) {
-		newDelta *= friction;
-	}
-
-	newDelta.x -= dx * vector * power;
-	newDelta.y += height;
-	newDelta.z -= dz * vector * power;
-
-	if (newDelta.y > heightCap) {
-		newDelta.y = heightCap;
-	}
-
-	if (_this->getHealthAsInt() <= 0) {
-		_this->mIsKnockedBackOnDeath = true;
-	}
-
-	_this->mStateVectorComponent.mPosDelta = newDelta;
-}
-
-void LegacyKnockback::calculatePlayerKnockback(Player *_this, const ActorDamageSource &source, float dx, float dz) {
-
-	float knockbackResistanceValue = _this->getMutableAttribute(AttributeID::KnockbackResistance)->mCurrentValue;
-	if (knockbackResistanceValue >= 1.f) return;
-
-	auto& lvl = *_this->mLevel;
-
-	// initializations
-	float power = settings.normalKBPower;
-	float height = settings.normalKBHeight;
-	float heightCap = settings.heightCap;
-	float heightThreshold = settings.heightThreshold;
-
-	if (source.isChildEntitySource()) {
-		auto damager = lvl.fetchEntity(source.getDamagingEntityUniqueID(), false);
-		if (damager) {
-
-			if (settings.customProjectileKBEnabled) {
-
-				switch (damager->getEntityTypeId()) {
-					case ActorType::FishingHook:
-					case ActorType::Snowball:
-					case ActorType::ThrownEgg: {
-						power = settings.comboProjectileKBPower; // projectiles used for pvp combos
-						height = settings.comboProjectileKBHeight;
-						break;
-					}
-					case ActorType::Enderpearl: {
-						power = settings.enderpearlKBPower;
-						height = settings.enderpearlKBHeight;
-						break;
-					}
-					default: break;
-				}
-
-			}
-			power *= LegacyKnockback::getPunchEnchantmentMultiplier(damager);
-		}
-	}
-
-	else if (source.isEntitySource()) {
-
-		auto attacker = lvl.fetchEntity(source.getEntityUniqueID(), false);
-		if (attacker && attacker->isInstanceOfMob()) {
-
-			switch (attacker->getEntityTypeId()) {
-				case ActorType::Dragon: {
-					power *= 4.f;
-					height *= 4.f;
-					heightCap *= 4.f;
-					break;
-				}
-				case ActorType::IronGolem: {
-					power *= 2.f;
-					height *= 2.f;
-					heightCap *= 2.f;
-					break;
-				}
-				case ActorType::Player_0: {
-					auto playerAttacker = ((Player*)attacker);
-					if (playerAttacker->mEZPlayer->mHasResetSprint && playerAttacker->isSprinting()) {
-						power += settings.additionalWTapKBPower;
-						height += settings.additionalWTapKBHeight;
-						playerAttacker->mEZPlayer->mHasResetSprint = false;
-					}
-					break;
-				}
-				default: break;
-			}
-
-			// attacking on the same tick that you receive knockback will set lower values (aka "reducing")
-			uint64_t currentTick = lvl.getServerTick();
-			if ((currentTick - _this->mEZPlayer->mLastAttackedActorTimestamp) <= 1) {
-				power *= settings.KBReductionFactor;
-			}
-
-			float kbEnchantmentBonus = (float)(((Mob*)attacker)->getMeleeKnockbackBonus()) * settings.normalKBPower;
-			power += kbEnchantmentBonus;
-		}
-	}
-
-	// calculate knockback resistance
-	float scaledKnockbackForce = std::fmax(0.f, 1.f - knockbackResistanceValue);
-	if (scaledKnockbackForce < 1.f) {
-		power *= scaledKnockbackForce;
-		height *= scaledKnockbackForce;
-	}
-
-	// momentum calculations
-	float vector = std::sqrtf((dx * dx) + (dz * dz));
-	if (vector < 0.0001f) return;
-	vector = 1.f / vector;
-	float horizontalFriction = 1.f;
-	float verticalFriction = 1.f;
-
-	//auto newDelta = _this->mStateVectorComponent.mPosDelta;
-	auto newDelta = _this->getRawPlayerPosDelta();
-
-	if (!_this->mTeleportedThisTick) {
-
-		horizontalFriction = 1.f / settings.horizontalKBFriction;
-		verticalFriction = 1.f / settings.verticalKBFriction;
-
-		// clamp pos delta
-		float d = std::sqrtf((newDelta.x * newDelta.x) + (newDelta.z * newDelta.z));
-		if (d > settings.maxHorizontalDisplacement) {
-			newDelta.normalizeXZ();
-			newDelta.x *= settings.maxHorizontalDisplacement;
-			newDelta.z *= settings.maxHorizontalDisplacement;
-		}
-		newDelta.y = (float)std::clamp(newDelta.y, -settings.maxVerticalDisplacement, settings.maxVerticalDisplacement);
-
-		newDelta.x *= horizontalFriction;
-		newDelta.z *= horizontalFriction;
-	}
-
-	newDelta.x -= dx * vector * power;
-	newDelta.z -= dz * vector * power;
-
-	// heightcap stuff
-	if (settings.useJavaHeightCap) {
-		newDelta.y *= verticalFriction;
-		newDelta.y += height;
-
-		if (newDelta.y > heightThreshold) {
-			newDelta.y = heightCap;
-		}
-	}
-	else if (settings.useCustomHeightCap) {
-		float oldDeltaY = newDelta.y;
-		newDelta.y *= verticalFriction;
-		newDelta.y += height;
-
-		if ((newDelta.y + oldDeltaY) > heightThreshold) {
-			newDelta.y = heightCap;
-		}
-	}
-	else { // if no heightcap is configured
-		  newDelta.y = height;
-	}
-
-	// client ignores motion packets if it's dead anyway so this seems to be pointless code for players
-	// but keeping it in for the sake of vanilla consistency in case it gets used elsewhere
-	if (_this->getHealthAsInt() <= 0) {
-		_this->mIsKnockedBackOnDeath = true;
-	}
-
-	// for some reason vanilla broadcasts this but its just wasteful and doesn't do anything
-	// instead we can just send the packet only to the player who was knocked back
-	//_this->mDimension->sendPacketForEntity(*_this, SetActorMotionPacket(_this->mRuntimeID, newDelta), nullptr);
-	SetActorMotionPacket motionPkt(_this->mRuntimeID, newDelta);
-	_this->sendNetworkPacket(motionPkt);
-}
-
 // KnockbackRules is a namespace, not a class
 //THook(bool, "?useLegacyKnockback@KnockbackRules@@YA_NAEBVLevel@@@Z", void* level) { return true; }
 
@@ -297,11 +33,11 @@ TInstanceHook(float, "?getArmorKnockbackResistance@ArmorItem@@UEBAMXZ", ArmorIte
 	 return original(this);
 }
 
-TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor) {
+TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &target) {
 
 	auto& lvl = *this->mLevel;
-	bool targetIsInstanceOfPlayer = actor.isInstanceOfPlayer();
-	bool targetIsInstanceOfMob = actor.isInstanceOfMob();
+	bool targetIsInstanceOfPlayer = target.isInstanceOfPlayer();
+	bool targetIsInstanceOfMob = target.isInstanceOfMob();
 
 	// custom stuff
 	this->mEZPlayer->mLastAttackedActorTimestamp = lvl.getServerTick();
@@ -325,44 +61,28 @@ TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &actor)
 	}
 
 	auto attachPos = this->getAttachPos(ActorLocation::Body, 0.f);
-	int32_t damage = this->calculateAttackDamage(actor);
-	if (damage <= 0) {
+	auto [dmg, isCrit] = LegacyKnockback::calculateAttackDamage(*this, target);
+
+	if (dmg <= 0.f) {
 		this->playSynchronizedSound(LevelSoundEvent::AttackNoDamage, attachPos, -1, false);
 	}
 	else {
 		this->playSynchronizedSound(LevelSoundEvent::AttackStrong, attachPos, -1, false);
 
-		bool isCrit = false;
-		if (settings.playersCanCrit &&
-			(this->mFallDistance > 0.f) &&
-			!this->mOnGround &&
-			!this->onLadder() &&
-			!this->isInWater() &&
-			!this->hasEffect(*MobEffect::BLINDNESS) &&
-			targetIsInstanceOfMob) {
-
-			damage = (int32_t)(((float)(damage)) * 1.5f);
-			isCrit = true;
-		}
-
 		ActorDamageByActorSource dmgSource(*this, ActorDamageCause::EntityAttack);
-		if (actor.hurt(dmgSource, damage, true, false) && targetIsInstanceOfMob) {
+		if (target.hurt(dmgSource, (int32_t)dmg, true, false) && targetIsInstanceOfMob) {
 
-			this->setLastHurtMob(&actor);
+			this->setLastHurtMob(&target);
 			this->causeFoodExhaustion(0.3f);
 			if (isCrit) {
-				this->_crit(actor); // this is just for the crit particle animation
+				this->_crit(target); // this is just for the crit particle animation
 			}
 
 			ItemStack selectedItemCopy(this->getSelectedItem());
-			if (selectedItemCopy.mValid &&
-				selectedItemCopy.mItem &&
-				!selectedItemCopy.isNull() &&
-				(selectedItemCopy.mCount > 0) &&
-				!this->isInCreativeMode()) {
+			if (selectedItemCopy && !this->isInCreativeMode()) {
 
 				if (this->getHealthAsInt() > 0) {
-					selectedItemCopy.getItem()->hurtEnemy(selectedItemCopy, (Mob*)&actor, this);
+					selectedItemCopy.getItem()->hurtEnemy(selectedItemCopy, (Mob*)&target, this);
 				}
 
 				if (!this->mDead) {
@@ -502,13 +222,12 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 				// - getEntityUniqueID() will always refer to the parent actor (example: the player who shot a projectile)
 				// - getDamagingEntityUniqueID() will refer to the child actor (ex: a projectile) if it exists, else it will refer to the parent actor
 				auto attacker = lvl.fetchEntity(source.getEntityUniqueID(), false);
-
 				if (attacker) {
 
 					if (knock) {
 
-						auto thisPos = this->getPos();
-						auto thatPos = attacker->getPos();
+						const auto& thisPos = this->getPos();
+						const auto& thatPos = attacker->getPos();
 						float dx = thatPos.x - thisPos.x;
 						float dz = thatPos.z - thisPos.z;
 						float distSqr = (float)(std::sqrtf((dx * dx) + (dz * dz)));
@@ -522,13 +241,13 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 						if (attacker->isSprinting()) {
 							power += 1.f;
 						}
-						this->knockback(attacker, (uint32_t)damage, dx, dz, power, 0.4f, 0.4f);*/
+						this->knockback(attacker, (int32_t)damage, dx, dz, power, 0.4f, 0.4f);*/
 
 						if (this->isInstanceOfPlayer()) {
-							LegacyKnockback::calculatePlayerKnockback((Player*)this, source, dx, dz);
+							LegacyKnockback::calculatePlayerKnockback(*(Player*)this, source, dx, dz);
 						}
 						else {
-							LegacyKnockback::calculateMobKnockback(this, source, dx, dz);
+							LegacyKnockback::calculateMobKnockback(*this, source, dx, dz);
 						}
 					}
 

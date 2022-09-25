@@ -82,11 +82,18 @@ namespace LegacyKnockback {
 
 inline std::mt19937 RNG_INSTANCE(std::random_device{}());
 
+struct DamageInfo {
+	float damage;
+	bool isCriticalHit;
+};
+
 float generateRandomFloat(float min = 0.f, float max = 1.f);
 int32_t getOnFireTime(Actor *projectile);
 float getPunchEnchantmentMultiplier(Actor* projectile);
-void calculateMobKnockback(Mob *_this, const ActorDamageSource &source, float dx, float dz);
-void calculatePlayerKnockback(Player *_this, const ActorDamageSource &source, float dx, float dz);
+bool shouldInvokeCriticalHit(const Player &attacker, const Actor &target);
+DamageInfo calculateAttackDamage(Player &attacker, Actor &target);
+void calculateMobKnockback(Mob &target, const ActorDamageSource &source, float dx, float dz);
+void calculatePlayerKnockback(Player &target, const ActorDamageSource &source, float dx, float dz);
 
 } // namespace LegacyKnockback
 

@@ -23,17 +23,17 @@ LegacyKnockback:
 	normalKBPower: 0.4
 	normalKBHeight: 0.4
 	additionalWTapKBPower: 0.225
-	additionalWTapKBHeight: 0.065
+	additionalWTapKBHeight: 0.0625
 	KBReductionFactor: 0.7
 	horizontalKBFriction: 1.6
 	verticalKBFriction: 4.0
 	maxHorizontalDisplacement: 0.2
-	maxVerticalDisplacement: 0.2
+	maxVerticalDisplacement: 0.25
 	customProjectileKBEnabled: true
 	comboProjectileKBPower: 0.425
-	comboProjectileKBHeight: 0.385
+	comboProjectileKBHeight: 0.3925
 	enderpearlKBPower: 0.8
-	enderpearlKBHeight: 0.38
+	enderpearlKBHeight: 0.3925
 	useJavaSprintReset: false
 	useJavaHeightCap: false
 	useCustomHeightCap: true
