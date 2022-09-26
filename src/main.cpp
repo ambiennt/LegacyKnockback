@@ -63,14 +63,14 @@ TInstanceHook(bool, "?attack@Player@@UEAA_NAEAVActor@@@Z", Player, Actor &target
 	auto attachPos = this->getAttachPos(ActorLocation::Body, 0.f);
 	auto [dmg, isCrit] = LegacyKnockback::calculateAttackDamage(*this, target);
 
-	if (dmg <= 0.f) {
+	if (dmg <= 0) {
 		this->playSynchronizedSound(LevelSoundEvent::AttackNoDamage, attachPos, -1, false);
 	}
 	else {
 		this->playSynchronizedSound(LevelSoundEvent::AttackStrong, attachPos, -1, false);
 
 		ActorDamageByActorSource dmgSource(*this, ActorDamageCause::EntityAttack);
-		if (target.hurt(dmgSource, (int32_t)dmg, true, false) && targetIsInstanceOfMob) {
+		if (target.hurt(dmgSource, dmg, true, false) && targetIsInstanceOfMob) {
 
 			this->setLastHurtMob(&target);
 			this->causeFoodExhaustion(0.3f);

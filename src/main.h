@@ -83,8 +83,12 @@ namespace LegacyKnockback {
 inline std::mt19937 RNG_INSTANCE(std::random_device{}());
 
 struct DamageInfo {
-	float damage;
+	int32_t damage;
 	bool isCriticalHit;
+
+	// i have no idea what this number signifies
+	// but any higher damage and and it adds extra health to the target for some reason
+	constexpr static inline int32_t MAX_DAMAGE = 3435973;
 };
 
 float generateRandomFloat(float min = 0.f, float max = 1.f);

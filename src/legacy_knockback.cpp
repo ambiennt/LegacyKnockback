@@ -38,40 +38,43 @@ bool LegacyKnockback::shouldInvokeCriticalHit(const Player &attacker, const Acto
 
 LegacyKnockback::DamageInfo LegacyKnockback::calculateAttackDamage(Player &attacker, Actor &target) {
 
-	float baseAttackDmg = attacker.getMutableAttribute(AttributeID::AttackDamage)->mCurrentValue;
+	double baseAttackDmg = (double)attacker.getMutableAttribute(AttributeID::AttackDamage)->mCurrentValue;
 	const auto& equippedItem = attacker.getCarriedItem();
-	float combinedAttackDmg = baseAttackDmg + (float)(equippedItem.getAttackDamage());
+	double combinedAttackDmg = baseAttackDmg + (double)(equippedItem.getAttackDamage());
+
+	bool isCriticalHit = LegacyKnockback::shouldInvokeCriticalHit(attacker, target);
+	if (isCriticalHit) {
+		combinedAttackDmg *= 1.5;
+	}
+
+	if (target.isInstanceOfMob()) {
+		double meleeDmgBonus = (double)EnchantUtils::getMeleeDamageBonus(target, attacker);
+		combinedAttackDmg += meleeDmgBonus;
+		EnchantUtils::doPostDamageEffects(target, attacker);
+	}
 
 	if (attacker.hasEffect(*MobEffect::DAMAGE_BOOST)) {
-		int32_t dmgBoostCount = ((int32_t)attacker.getEffect(*MobEffect::DAMAGE_BOOST)->mAmplifier) + 1;
+		int32_t dmgBoostCount = attacker.getEffect(*MobEffect::DAMAGE_BOOST)->mAmplifier + 1;
 		for (int32_t i = 0; i < dmgBoostCount; i++) {
-			combinedAttackDmg = (combinedAttackDmg * 1.3f) + 1.f;
+			combinedAttackDmg = (combinedAttackDmg * 1.3) + 1.0;
 		}
 	}
 
 	if (attacker.hasEffect(*MobEffect::WEAKNESS)) {
-		int32_t weaknessCount = ((int32_t)attacker.getEffect(*MobEffect::WEAKNESS)->mAmplifier) + 1;
+		int32_t weaknessCount = attacker.getEffect(*MobEffect::WEAKNESS)->mAmplifier + 1;
 		for (int32_t j = 0; j < weaknessCount; j++) {
-			combinedAttackDmg = (combinedAttackDmg * 0.8f) - 0.5f;
-			if (combinedAttackDmg < 0.f) {
-				combinedAttackDmg = 0.f;
+			combinedAttackDmg = (combinedAttackDmg * 0.8) - 0.5;
+			if (combinedAttackDmg < 0.0) {
+				combinedAttackDmg = 0.0;
 				break;
 			}
 		}
 	}
 
-    bool isCriticalHit = LegacyKnockback::shouldInvokeCriticalHit(attacker, target);
-	if (isCriticalHit) {
-		combinedAttackDmg *= 1.5f;
+	if (combinedAttackDmg > (double)DamageInfo::MAX_DAMAGE) {
+		return {DamageInfo::MAX_DAMAGE, isCriticalHit};
 	}
-
-	if (target.isInstanceOfMob()) {
-		float meleeDmgBonus = (float)EnchantUtils::getMeleeDamageBonus(target, attacker);
-		combinedAttackDmg += meleeDmgBonus;
-		EnchantUtils::doPostDamageEffects(target, attacker);
-	}
-
-	return {combinedAttackDmg, isCriticalHit};
+	return {(int32_t)combinedAttackDmg, isCriticalHit};
 }
 
 void LegacyKnockback::calculateMobKnockback(Mob &target, const ActorDamageSource &source, float dx, float dz) {
