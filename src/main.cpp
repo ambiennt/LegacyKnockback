@@ -109,7 +109,7 @@ TInstanceHook(bool, "?_hurt@Mob@@MEAA_NAEBVActorDamageSource@@H_N1@Z",
 	else if ((this->mInvulnerableTime == settings.hurtCooldownTicks) && this->mChainedDamageEffects) { // defaults to 10 when hurt
 		damage += this->mLastHurt;
 	}
-	else if ((float)(this->mInvulnerableTime) <= 0) {
+	else if (this->mInvulnerableTime <= 0) {
 		this->mLastHurt = 0;
 		this->mLastHurtCause = ActorDamageCause::None;
 	}
@@ -160,7 +160,7 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 	bool chainedHurt = false;
 	bool enoughDamage = false;
 
-	if ((cause == ActorDamageCause::Suicide) || ((float)(this->mInvulnerableTime) <= 0)) {
+	if ((cause == ActorDamageCause::Suicide) || (this->mInvulnerableTime <= 0)) {
 		hurt                     = true;
 		enoughDamage             = (damage > 0);
 		this->mLastHurt          = damage;
@@ -179,7 +179,7 @@ TInstanceHook(bool, "?hurtEffects@Mob@@UEAA_NAEBVActorDamageSource@@H_N1@Z",
 		this->mLastHealth        = this->getHealthAsInt();
 		this->mLastHurtTimestamp = currentTick;
 	}
-	else if ((float)(this->mInvulnerableTime) > 0) {
+	else if (this->mInvulnerableTime > 0) {
 		if (damage <= this->mLastHurt) {
 			return false;
 		}

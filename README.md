@@ -24,7 +24,7 @@ LegacyKnockback:
 	normalKBHeight: 0.4
 	additionalWTapKBPower: 0.225
 	additionalWTapKBHeight: 0.0625
-	KBReductionFactor: 0.7
+	KBReductionFactor: 0.75
 	horizontalKBFriction: 1.6
 	verticalKBFriction: 4.0
 	maxHorizontalDisplacement: 0.2

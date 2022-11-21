@@ -38,7 +38,7 @@ bool LegacyKnockback::shouldInvokeCriticalHit(const Player &attacker, const Acto
 
 LegacyKnockback::DamageInfo LegacyKnockback::calculateAttackDamage(Player &attacker, Actor &target) {
 
-	double baseAttackDmg = (double)attacker.getMutableAttribute(AttributeID::AttackDamage)->mCurrentValue;
+	double baseAttackDmg = (double)attacker.getAttributeInstance(AttributeID::AttackDamage).mCurrentValue;
 	const auto& equippedItem = attacker.getCarriedItem();
 	double combinedAttackDmg = baseAttackDmg + (double)(equippedItem.getAttackDamage());
 
@@ -79,7 +79,7 @@ LegacyKnockback::DamageInfo LegacyKnockback::calculateAttackDamage(Player &attac
 
 void LegacyKnockback::calculateMobKnockback(Mob &target, const ActorDamageSource &source, float dx, float dz) {
 
-	float knockbackResistanceValue = target.getMutableAttribute(AttributeID::KnockbackResistance)->mCurrentValue;
+	float knockbackResistanceValue = target.getAttributeInstance(AttributeID::KnockbackResistance).mCurrentValue;
 	if (knockbackResistanceValue >= 1.f) return;
 
 	auto& lvl = *target.mLevel;
@@ -164,7 +164,7 @@ void LegacyKnockback::calculateMobKnockback(Mob &target, const ActorDamageSource
 
 void LegacyKnockback::calculatePlayerKnockback(Player &target, const ActorDamageSource &source, float dx, float dz) {
 
-	float knockbackResistanceValue = target.getMutableAttribute(AttributeID::KnockbackResistance)->mCurrentValue;
+	float knockbackResistanceValue = target.getAttributeInstance(AttributeID::KnockbackResistance).mCurrentValue;
 	if (knockbackResistanceValue >= 1.f) return;
 
 	auto& lvl = *target.mLevel;
